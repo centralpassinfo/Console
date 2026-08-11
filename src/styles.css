@@ -58,6 +58,7 @@ h3 { font-size: 1rem; line-height: 1.25; }
 
 .brand { display: flex; align-items: center; gap: 10px; color: #fff8ec; }
 .brand__mark { width: 36px; height: 40px; overflow: visible; }
+.sidebar .brand__mark, .login-panel__brand .brand__mark { width: 46px; height: 50px; padding: 5px; overflow: hidden; border: 1px solid rgba(255,248,236,.72); border-radius: 11px; background: #fff8ec; box-shadow: 0 5px 16px rgba(17,8,18,.2); }
 .brand > span { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
 .brand strong { font-family: var(--font-display); font-size: 1.07rem; font-weight: 760; letter-spacing: -.02em; }
 .brand small { margin-top: 4px; color: #d9b55f; font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
