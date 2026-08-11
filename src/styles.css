@@ -211,22 +211,22 @@ tbody tr:hover { background: #f7f9fb; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
 /* Authentication */
-.login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(400px, .9fr) minmax(480px, 1.1fr); background: var(--surface); }
-.login-panel { position: relative; display: flex; flex-direction: column; padding: 42px 55px; overflow: hidden; color: #fff; background: var(--ink); }
+.login-page { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(520px, 1.05fr) minmax(560px, .95fr); background: var(--surface); }
+.login-panel { position: relative; display: flex; flex-direction: column; padding: clamp(42px, 4.5vw, 72px); overflow: hidden; color: #fff; background: var(--ink); }
 .login-panel::before { position: absolute; content: ''; width: 640px; height: 640px; right: -320px; bottom: -280px; border: 1px solid rgba(127,184,232,.12); border-radius: 50%; box-shadow: 0 0 0 90px rgba(127,184,232,.025), 0 0 0 180px rgba(127,184,232,.018); }
 .login-panel::after { position: absolute; content: ''; inset: 0; opacity: .34; background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 38px 38px; pointer-events: none; }
 .login-panel > * { position: relative; z-index: 1; }
 .login-panel__brand { padding-bottom: 40px; }
 .login-panel__copy { margin: auto 0; }
 .login-panel__copy .eyebrow { color: #8ac4f4; }
-.login-panel__copy h1 { max-width: 560px; color: #fff; font-size: clamp(2.8rem, 5vw, 5.1rem); line-height: .95; letter-spacing: -.05em; }
-.login-panel__copy p { max-width: 510px; margin-top: 24px; color: #aebdcc; font-size: 1rem; line-height: 1.65; }
+.login-panel__copy h1 { max-width: 620px; color: #fff; font-size: clamp(3.2rem, 4.9vw, 5.4rem); line-height: .95; letter-spacing: -.05em; }
+.login-panel__copy p { max-width: 560px; margin-top: 26px; color: #aebdcc; font-size: 1.05rem; line-height: 1.65; }
 .login-panel__assurance { display: flex; align-items: center; gap: 13px; max-width: 455px; padding-top: 27px; border-top: 1px solid rgba(255,255,255,.1); color: #8fc2ed; }
 .login-panel__assurance span { display: flex; flex-direction: column; }
 .login-panel__assurance strong { color: #edf5fb; font-size: .78rem; }
 .login-panel__assurance small { margin-top: 3px; color: #889caf; font-size: .69rem; }
-.login-form-wrap { display: grid; place-items: center; padding: 40px; background: var(--paper); }
-.login-form { width: min(100%, 440px); padding: 36px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-strong); box-shadow: var(--shadow); }
+.login-form-wrap { display: grid; place-items: center; padding: clamp(40px, 4.5vw, 76px); background: var(--paper); }
+.login-form { width: min(100%, 520px); padding: clamp(38px, 3.5vw, 50px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-strong); box-shadow: var(--shadow); }
 .login-form__heading { margin-bottom: 25px; }
 .login-lock { width: 42px; height: 42px; display: grid; place-items: center; margin-bottom: 18px; border-radius: 11px; color: var(--accent); background: var(--accent-wash); }
 .login-form h2 { font-size: 1.6rem; }
@@ -382,6 +382,16 @@ a.surface-link:hover { color: var(--accent); }
   .form-grid .field:last-child { grid-column: 1 / -1; }
 }
 
+@media (max-width: 1100px) {
+  .login-page { grid-template-columns: 1fr; }
+  .login-panel { min-height: 350px; padding: 34px 42px; }
+  .login-panel__brand { padding-bottom: 24px; }
+  .login-panel__copy h1 { font-size: clamp(3.2rem, 7vw, 4.4rem); }
+  .login-panel__copy p { max-width: 660px; margin-top: 18px; }
+  .login-panel__assurance { display: none; }
+  .login-form-wrap { padding: 50px 24px; }
+}
+
 @media (max-width: 900px) {
   .sidebar { transform: translateX(-105%); box-shadow: 18px 0 48px rgba(0,0,0,.2); transition: transform .22s ease; }
   .sidebar.is-open { transform: translateX(0); }
@@ -392,7 +402,7 @@ a.surface-link:hover { color: var(--accent); }
   .mobile-header .icon-button:hover { background: var(--surface-2); }
   .page { padding: 28px 22px 50px; }
   .login-page { grid-template-columns: 1fr; }
-  .login-panel { min-height: 410px; padding: 30px 35px; }
+  .login-panel { min-height: 330px; padding: 30px 35px; }
   .login-panel__copy h1 { font-size: 3.5rem; }
   .login-panel__copy p { margin-top: 17px; }
   .login-panel__assurance { margin-top: 36px; }
@@ -452,7 +462,7 @@ a.surface-link:hover { color: var(--accent); }
 @media (max-width: 500px) {
   .summary-grid { grid-template-columns: 1fr; }
   .summary-card { min-height: 125px; }
-  .login-panel { min-height: 365px; padding: 25px; }
+  .login-panel { min-height: 315px; padding: 25px; }
   .login-panel__copy h1 { font-size: 2.8rem; }
   .login-panel__copy p { font-size: .86rem; }
   .login-panel__assurance { display: none; }
