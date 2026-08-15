@@ -77,6 +77,7 @@ module.exports = {
   CONTRACT_STATUSES,
   EXPIRY_WARNING_DAYS,
   parseMoneyToCents,
+  dateOnly,
   publicContract,
   contractState,
   summarizeContracts,
