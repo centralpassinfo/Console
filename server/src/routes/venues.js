@@ -7,6 +7,8 @@ const { encryptSecret, decryptSecret } = require('../crypto');
 const { validateRequest, isHttpUrl } = require('../validation');
 const { requireAuth, requireCsrf, actorFrom } = require('../auth');
 const { recordAudit, completeAudit } = require('../audit');
+const { summarizeContracts } = require('../contracts');
+const { listVenueContracts, contractSummaries } = require('../contract-store');
 const {
   VenueApiError,
   venueRequest,
@@ -68,9 +70,10 @@ router.get(
   async (req, res, next) => {
     try {
       const { rows } = await pool.query(`SELECT * FROM venues ORDER BY name ASC`);
+      const summaries = await contractSummaries(rows.map((venue) => venue.id));
       const shouldFetchLive = req.query.live !== 'false';
       const venues = await Promise.all(rows.map(async (venue) => {
-        const safe = publicVenue(venue);
+        const safe = { ...publicVenue(venue), contractSummary: summaries.get(venue.id) || summarizeContracts([]) };
         if (!shouldFetchLive) return safe;
         try {
           const live = await snapshotVenue(venue, decryptSecret(venue.platform_api_key));
@@ -100,13 +103,14 @@ router.get(
     try {
       const venue = await findVenue(req.params.id);
       if (!venue) return res.status(404).json({ error: 'Venue not found.' });
+      const contracts = await listVenueContracts(venue.id);
       let live = null;
       try {
         live = await getVenueDetail(venue, decryptSecret(venue.platform_api_key));
       } catch (error) {
         live = { error: error.message || 'Could not reach the venue.', errorCode: error.code || null };
       }
-      return res.json({ venue: publicVenue(venue), live });
+      return res.json({ venue: { ...publicVenue(venue), contractSummary: summarizeContracts(contracts) }, contracts, live });
     } catch (error) { return next(error); }
   }
 );
@@ -272,4 +276,3 @@ router.put(
 );
 
 module.exports = router;
-

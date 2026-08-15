@@ -19,7 +19,7 @@ export default function VenuesPage() {
     const matchesQuery = `${venue.name} ${venue.slug} ${venue.apiUrl}`.toLowerCase().includes(query.toLowerCase());
     const state = venue.live?.state;
     const matchesFilter = filter === 'all'
-      || (filter === 'attention' && (['degraded', 'down', 'unreachable'].includes(state) || venue.live?.platform?.plan === 'unconfigured'))
+      || (filter === 'attention' && (['degraded', 'down', 'unreachable'].includes(state) || venue.live?.platform?.plan === 'unconfigured' || ['missing', 'expiring', 'expired'].includes(venue.contractSummary?.state)))
       || filter === state
       || filter === venue.registryStatus;
     return matchesQuery && matchesFilter;
@@ -41,4 +41,3 @@ export default function VenuesPage() {
     </div>
   );
 }
-

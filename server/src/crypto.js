@@ -3,6 +3,9 @@
 const crypto = require('crypto');
 const { config } = require('./config');
 
+const FILE_MAGIC = Buffer.from('CPF1');
+const CONTRACT_FILE_AAD = Buffer.from('centralpass:contract-file:v1');
+
 function resolveKey(raw = config.encryptionKey) {
   if (!raw) throw new Error('ENCRYPTION_KEY is required');
   const value = String(raw).trim();
@@ -38,5 +41,27 @@ function decryptSecret(payload, rawKey) {
   ]).toString('utf8');
 }
 
-module.exports = { encryptSecret, decryptSecret, resolveKey };
+function encryptBuffer(value, rawKey) {
+  if (!Buffer.isBuffer(value) || value.length === 0) throw new Error('Cannot encrypt an empty file');
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', resolveKey(rawKey), iv);
+  cipher.setAAD(CONTRACT_FILE_AAD);
+  const encrypted = Buffer.concat([cipher.update(value), cipher.final()]);
+  return Buffer.concat([FILE_MAGIC, iv, cipher.getAuthTag(), encrypted]);
+}
 
+function decryptBuffer(value, rawKey) {
+  const payload = Buffer.isBuffer(value) ? value : Buffer.from(value || '');
+  if (payload.length < 33 || !payload.subarray(0, FILE_MAGIC.length).equals(FILE_MAGIC)) {
+    throw new Error('Encrypted file has an unsupported format');
+  }
+  const iv = payload.subarray(4, 16);
+  const tag = payload.subarray(16, 32);
+  const ciphertext = payload.subarray(32);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', resolveKey(rawKey), iv);
+  decipher.setAAD(CONTRACT_FILE_AAD);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
+module.exports = { encryptSecret, decryptSecret, encryptBuffer, decryptBuffer, resolveKey };

@@ -61,6 +61,7 @@ app.get('/api/console/health', async (req, res) => {
 });
 app.use('/api/console/auth', require('./routes/auth'));
 app.use('/api/console/venues', require('./routes/venues'));
+app.use('/api/console/venues', require('./routes/contracts'));
 app.use('/api/console/audit', require('./routes/audit'));
 
 if (config.nodeEnv === 'production') {

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import Icon from '../components/Icon.jsx';
 import Modal from '../components/Modal.jsx';
+import ContractPanel from '../components/ContractPanel.jsx';
 import { PlanBadge, StatusBadge } from '../components/Status.jsx';
 import { formatDateTime, formatNumber, humanise } from '../format.js';
 
@@ -55,7 +56,7 @@ export default function VenueDetailPage() {
   if (loading) return <div className="page"><div className="detail-loading"><span className="spinner" /><p>Contacting venue services…</p></div></div>;
   if (error || !data) return <div className="page"><div className="error-state"><Icon name="alert" size={28} /><h1>Venue could not be loaded</h1><p>{error}</p><button className="button button--secondary" onClick={load}>Try again</button></div></div>;
 
-  const { venue, live } = data;
+  const { venue, live, contracts = [] } = data;
   const serviceState = live?.error ? (live.errorCode === 'UNREACHABLE' || live.errorCode === 'TIMEOUT' ? 'unreachable' : 'degraded') : 'online';
   const plan = featureState?.plan;
 
@@ -94,6 +95,8 @@ export default function VenueDetailPage() {
           </div>
         </article>
       </section>
+
+      <ContractPanel venueId={venue.id} initialContracts={contracts} />
 
       <section className="content-card feature-panel">
         <div className="content-card__header content-card__header--feature"><div><span className="eyebrow">Entitlements</span><h2>Feature access</h2><p>Plan defaults come from the venue deployment. Overrides apply immediately and are recorded in both audit trails.</p></div><div className="feature-legend"><span><i className="source-dot source-dot--plan" />Plan default</span><span><i className="source-dot source-dot--override" />Explicit override</span><span><Icon name="lock" size={14} />Core</span></div></div>

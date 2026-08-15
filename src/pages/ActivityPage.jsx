@@ -19,7 +19,7 @@ export default function ActivityPage() {
       {error && <div className="form-alert form-alert--error"><Icon name="alert" size={18} />{error}</div>}
       <section className="content-card">
         <div className="content-card__header"><div><h2>Cross-venue history</h2><p>This local trail complements the entitlement audit held independently by each venue.</p></div></div>
-        {loading ? <div className="loading-block">Loading audit history…</div> : items.length ? <div className="activity-table-wrap"><table className="activity-table"><thead><tr><th>Action</th><th>Venue</th><th>Actor</th><th>Outcome / detail</th><th>Time</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><span className="action-label"><Icon name={item.action.includes('features') ? 'settings' : item.action.includes('auth') ? 'lock' : 'venues'} size={16} />{humanise(item.action.replace(/\./g, ' '))}</span></td><td>{item.venue_id ? <Link to={`/venues/${item.venue_id}`}>{item.venue_name || `Venue ${item.venue_id}`}</Link> : 'Console'}</td><td>{item.actor}</td><td><AuditDetail detail={item.detail} /></td><td>{formatDateTime(item.created_at)}</td></tr>)}</tbody></table></div> : <div className="empty-state empty-state--compact"><h3>No console activity yet</h3><p>Venue registry and feature changes will appear here.</p></div>}
+        {loading ? <div className="loading-block">Loading audit history…</div> : items.length ? <div className="activity-table-wrap"><table className="activity-table"><thead><tr><th>Action</th><th>Venue</th><th>Actor</th><th>Outcome / detail</th><th>Time</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><span className="action-label"><Icon name={item.action.includes('contract') ? 'file' : item.action.includes('features') ? 'settings' : item.action.includes('auth') ? 'lock' : 'venues'} size={16} />{humanise(item.action.replace(/\./g, ' '))}</span></td><td>{item.venue_id ? <Link to={`/venues/${item.venue_id}`}>{item.venue_name || `Venue ${item.venue_id}`}</Link> : 'Console'}</td><td>{item.actor}</td><td><AuditDetail detail={item.detail} /></td><td>{formatDateTime(item.created_at)}</td></tr>)}</tbody></table></div> : <div className="empty-state empty-state--compact"><h3>No console activity yet</h3><p>Venue registry, contract and feature changes will appear here.</p></div>}
       </section>
     </div>
   );
@@ -34,4 +34,3 @@ function AuditDetail({ detail }) {
   if (detail.email) return <span>{detail.email}</span>;
   return <span className="muted">Recorded</span>;
 }
-

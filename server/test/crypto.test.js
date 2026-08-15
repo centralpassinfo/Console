@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
-const { encryptSecret, decryptSecret, resolveKey } = require('../src/crypto');
+const { encryptSecret, decryptSecret, encryptBuffer, decryptBuffer, resolveKey } = require('../src/crypto');
 
 test('AES-256-GCM secrets round-trip without storing plaintext', () => {
   const key = crypto.randomBytes(32).toString('hex');
@@ -25,3 +25,17 @@ test('authenticated encryption rejects tampering', () => {
   assert.throws(() => decryptSecret(changed, key));
 });
 
+test('contract files round-trip as authenticated binary data', () => {
+  const key = crypto.randomBytes(32).toString('hex');
+  const source = Buffer.from('%PDF-1.7\nprivate contract contents\n%%EOF');
+  const encrypted = encryptBuffer(source, key);
+  assert.equal(encrypted.includes(source), false);
+  assert.deepEqual(decryptBuffer(encrypted, key), source);
+});
+
+test('contract file encryption rejects tampering', () => {
+  const key = crypto.randomBytes(32).toString('hex');
+  const encrypted = encryptBuffer(Buffer.from('%PDF-1.7\ncontract'), key);
+  encrypted[encrypted.length - 1] ^= 1;
+  assert.throws(() => decryptBuffer(encrypted, key));
+});

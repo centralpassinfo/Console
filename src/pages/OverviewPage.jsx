@@ -38,7 +38,7 @@ export default function OverviewPage() {
     return {
       total: active.length,
       operational: active.filter((venue) => venue.live?.state === 'online').length,
-      attention: active.filter((venue) => ['degraded', 'down', 'unreachable'].includes(venue.live?.state) || venue.live?.platform?.plan === 'unconfigured').length,
+      attention: active.filter((venue) => ['degraded', 'down', 'unreachable'].includes(venue.live?.state) || venue.live?.platform?.plan === 'unconfigured' || ['missing', 'expiring', 'expired'].includes(venue.contractSummary?.state)).length,
       orders: active.reduce((sum, venue) => sum + Number(venue.live?.platform?.counts?.orders_today || 0), 0),
     };
   }, [venues]);
@@ -59,7 +59,7 @@ export default function OverviewPage() {
       <section className="summary-grid" aria-label="Venue summary">
         <article className="summary-card"><div className="summary-card__icon summary-card__icon--blue"><Icon name="venues" /></div><span>Managed venues</span><strong>{loading ? '—' : summary.total}</strong><small>Active registry records</small></article>
         <article className="summary-card"><div className="summary-card__icon summary-card__icon--green"><Icon name="signal" /></div><span>Operational now</span><strong>{loading ? '—' : `${summary.operational}/${summary.total}`}</strong><small>{summary.total && summary.operational === summary.total ? 'All systems responding' : 'Based on latest check'}</small></article>
-        <article className={`summary-card${summary.attention ? ' summary-card--attention' : ''}`}><div className="summary-card__icon summary-card__icon--amber"><Icon name="alert" /></div><span>Needs attention</span><strong>{loading ? '—' : summary.attention}</strong><small>Outages, access or plan issues</small></article>
+        <article className={`summary-card${summary.attention ? ' summary-card--attention' : ''}`}><div className="summary-card__icon summary-card__icon--amber"><Icon name="alert" /></div><span>Needs attention</span><strong>{loading ? '—' : summary.attention}</strong><small>Service, plan or contract issues</small></article>
         <article className="summary-card"><div className="summary-card__icon summary-card__icon--ink"><Icon name="orders" /></div><span>Orders today</span><strong>{loading ? '—' : formatNumber(summary.orders)}</strong><small>Across responding venues</small></article>
       </section>
 
@@ -80,4 +80,3 @@ function VenueTableSkeleton() {
 function EmptyVenues() {
   return <div className="empty-state"><span><Icon name="venues" size={28} /></span><h3>Add your first venue</h3><p>Register its API domain and CentralPass platform key to begin monitoring service health.</p><Link className="button button--primary" to="/venues/new"><Icon name="plus" size={17} />Add venue</Link></div>;
 }
-

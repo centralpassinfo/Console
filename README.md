@@ -19,7 +19,30 @@ secrets, R2 credentials, SMS credentials, customer records, orders or menus.
 - Plan-aware feature controls, locked core features and dependency handling.
 - Named confirmation before every entitlement change.
 - Local cross-venue audit plus the venue's own entitlement audit.
+- Per-venue contract records with encrypted PDF storage, commercial terms,
+  renewal dates and missing/expiring agreement warnings.
 - Responsive desktop/mobile UI aligned to the CentralPass marketing brand.
+
+## Venue contracts
+
+Each venue detail page can store one or more agreement PDFs with the contract
+status, effective and expiry dates, signed date, setup/monthly fees, renewal
+terms and internal notes. PDFs are limited to 10 MB, validated as PDF files and
+encrypted with AES-256-GCM before being stored in Console's PostgreSQL database.
+The original file cannot be overwritten or deleted through Console; upload a
+new agreement and update the old status so the legal history remains intact.
+
+Uploads, metadata changes and downloads are written to `console_audit`.
+Contract summaries also feed the venue list and the **Needs attention** count:
+missing, expiring-within-60-days and expired agreements are surfaced.
+
+Because the same `ENCRYPTION_KEY` protects platform keys and contract files:
+
+- Keep a recoverable copy of `ENCRYPTION_KEY` in the CentralPass password
+  manager. Losing it makes existing encrypted records unrecoverable.
+- Enable scheduled backups for Console's PostgreSQL service and test a restore.
+- Store executed PDFs here, but have the services agreement itself drafted or
+  reviewed by an Australian commercial lawyer.
 
 ## Local setup on Windows
 
@@ -113,4 +136,3 @@ npm.cmd audit
 ```
 
 `npm run check` runs the encryption/TOTP tests and a production Vite build.
-

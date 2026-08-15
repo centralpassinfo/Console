@@ -11,6 +11,24 @@ export function formatDateTime(value) {
   }).format(new Date(value));
 }
 
+export function formatDate(value) {
+  if (!value) return 'No end date';
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium' }).format(date);
+}
+
+export function formatCurrencyCents(value) {
+  if (value === null || value === undefined) return 'Not recorded';
+  return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(Number(value) / 100);
+}
+
+export function formatFileSize(value) {
+  const bytes = Number(value || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function relativeTime(value) {
   if (!value) return 'Never';
   const seconds = Math.round((new Date(value).getTime() - Date.now()) / 1000);
@@ -28,4 +46,3 @@ export function humanise(value) {
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
-
