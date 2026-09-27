@@ -223,7 +223,7 @@ router.post(
         platformApiKey = platformApiKey || decryptSecret(venue.platform_api_key);
       }
       const result = await venueRequest({ apiUrl, platformApiKey, path: '/api/platform/status' });
-      return res.json({ ok: true, latencyMs: result.latencyMs, venue: result.data.venue, plan: result.data.plan });
+      return res.json({ ok: true, latencyMs: result.latencyMs, venue: result.data.venue });
     } catch (error) {
       if (error instanceof VenueApiError) {
         return res.status(error.status && error.status < 500 ? 400 : 502).json({ error: error.message, code: error.code || null });
@@ -240,11 +240,10 @@ router.put(
     param('id').isInt({ min: 1 }).toInt(),
     body('overrides').isObject().custom((overrides) => {
       const entries = Object.entries(overrides);
-      const allowed = ['order_emails', 'order_sms', 'customers', 'discounts', 'analytics', 'offers', 'campaigns', 'bookings', 'timeclock'];
       if (!entries.length) throw new Error('Supply at least one feature override.');
       for (const [key, value] of entries) {
-        if (!allowed.includes(key)) throw new Error(`${key} is not a billable feature.`);
-        if (value !== null && typeof value !== 'boolean') throw new Error(`${key} must be true, false or null.`);
+        if (!/^[a-z][a-z0-9_]*$/.test(key)) throw new Error('Invalid feature key.');
+        if (typeof value !== 'boolean') throw new Error(`${key} must be true or false.`);
       }
       return true;
     }),
@@ -263,7 +262,7 @@ router.put(
         detail: { overrides: req.body.overrides, outcome: 'requested' },
       });
       const features = await updateVenueFeatures(venue, decryptSecret(venue.platform_api_key), req.body.overrides, actor);
-      await completeAudit(auditId, { outcome: 'succeeded', plan: features.plan });
+      await completeAudit(auditId, { outcome: 'succeeded' });
       return res.json({ features });
     } catch (error) {
       if (auditId) await completeAudit(auditId, { outcome: 'failed', error: error.message }).catch(() => {});

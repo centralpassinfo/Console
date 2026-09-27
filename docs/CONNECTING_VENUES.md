@@ -21,13 +21,17 @@ another venue's payments, staff access or customer data.
 
 ## One-time setup for each venue backend
 
+When upgrading an existing deployment, deploy the venue backend first. Its
+migration 054 snapshots the old effective access once. Verify the resulting
+`/api/platform/features` response before deploying this Console UI. Existing
+venues keep their prior access; fresh databases start with every feature off.
+
 1. Confirm the platform backend contains these existing routes:
 
    - `GET /health`
    - `GET /api/platform/status`
    - `GET /api/platform/features`
    - `PUT /api/platform/features`
-   - `DELETE /api/platform/features/:key`
    - `GET /api/platform/audit`
 
 2. Generate a new key that is unique to this venue:
@@ -40,11 +44,10 @@ another venue's payments, staff access or customer data.
 
    ```text
    PLATFORM_API_KEY=<the new unique key>
-   PLAN=starter
    ```
 
-   Use `starter`, `pro` or `premium`. Always set `PLAN` explicitly; a missing or
-   misspelled value becomes `unconfigured` and grants every feature.
+   There is no plan variable. A new venue starts with every feature off.
+   Console assigns each feature individually after the venue is connected.
 
 4. Give the backend a stable API domain, for example:
 
@@ -64,8 +67,8 @@ another venue's payments, staff access or customer data.
      -Headers @{ 'X-Platform-Key' = '<the new unique key>' }
    ```
 
-   The second response should include `status`, `venue`, `plan`, `registry`,
-   `overrides`, `features`, `counts` and `ts`.
+   The second response should include `status`, `venue`, `registry`,
+   `assignments`, `features`, `counts` and `ts`.
 
 6. Sign in to CentralPass Console, choose **Add venue**, and enter:
 
@@ -73,10 +76,16 @@ another venue's payments, staff access or customer data.
    - `https://api.theirvenue.com.au` as the API URL.
    - Customer, owner and staff URLs for shortcuts.
    - The new `PLATFORM_API_KEY` once.
-   - Internal plan or billing notes if useful.
+   - Internal billing notes if useful.
 
 7. Use **Test connection** before saving. After saving, the key is shown only as
    `•••• set`; neither the API nor the browser can read it back.
+
+8. Open the venue detail page and switch on only the agreed features. A
+   bookings-only customer can have **Bookings on** with every other switch off.
+   The backend enforces these switches; check the venue admin, staff and
+   customer flows after configuration. Customer sites can read the safe
+   `features` booleans in `GET /api/settings/public` to hide unavailable links.
 
 ## Point each built website at its venue backend
 
@@ -139,4 +148,3 @@ Do not make `/api/platform/*` public and do not ship a platform key to solve it.
 
 There is an expected short disconnected window between steps 2 and 3. Rotate
 one venue at a time and avoid its busiest service period.
-

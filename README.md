@@ -12,11 +12,10 @@ secrets, R2 credentials, SMS credentials, customer records, orders or menus.
 - Mandatory email/password plus TOTP authenticator sign-in; no public signup.
 - PostgreSQL-backed venue registry and session storage.
 - Parallel venue checks with an independent five-second timeout per venue.
-- Fleet summary for availability, plan, orders today and customer count.
-- Loud `unconfigured` plan warning.
+- Fleet summary for availability, enabled features, orders today and customer count.
 - Write-only, encrypted platform keys that are never returned to the browser.
 - Venue detail with customer/admin/staff shortcuts.
-- Plan-aware feature controls, locked core features and dependency handling.
+- One switch per feature, including ordering, with technical dependency handling.
 - Named confirmation before every entitlement change.
 - Local cross-venue audit plus the venue's own entitlement audit.
 - Per-venue contract records with encrypted PDF storage, commercial terms,

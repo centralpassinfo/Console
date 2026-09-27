@@ -53,7 +53,7 @@ export default function VenueFormPage() {
         ? { id: Number(id), apiUrl: form.apiUrl }
         : { apiUrl: form.apiUrl, platformApiKey: form.platformApiKey, ...(editing ? { id: Number(id) } : {}) };
       const result = await api('/venues/test-connection', { method: 'POST', body });
-      setTestResult({ ok: true, message: `Connected to ${result.venue || 'venue'} in ${result.latencyMs} ms · ${result.plan} plan` });
+      setTestResult({ ok: true, message: `Connected to ${result.venue || 'venue'} in ${result.latencyMs} ms` });
     } catch (requestError) {
       setTestResult({ ok: false, message: requestError.message });
     } finally { setTesting(false); }
@@ -120,7 +120,7 @@ export default function VenueFormPage() {
 
         <section className="content-card form-section">
           <div className="form-section__intro"><span className="step-number">03</span><div><h2>Commercial context</h2><p>Internal notes only. Do not paste client credentials or customer data here.</p></div></div>
-          <Field label="Billing notes" optional hint="For example: plan agreement, trial end or one-off entitlement arrangement." error={fieldErrors.billingNotes}><textarea rows="5" value={form.billingNotes} onChange={(event) => setField('billingNotes', event.target.value)} placeholder="Premium plan from launch. 500 SMS allowance included…" /></Field>
+          <Field label="Billing notes" optional hint="For example: agreed features, trial end or a custom arrangement." error={fieldErrors.billingNotes}><textarea rows="5" value={form.billingNotes} onChange={(event) => setField('billingNotes', event.target.value)} placeholder="Bookings only from launch. Add ordering after staff training…" /></Field>
         </section>
 
         <div className="form-footer"><p><Icon name="shield" size={17} />No Stripe, admin, R2, SMS or JWT credentials belong in this console.</p><div><Link className="button button--secondary" to={editing ? `/venues/${id}` : '/venues'}>Cancel</Link><button className="button button--primary" type="submit" disabled={busy}>{busy ? 'Saving…' : editing ? 'Save venue' : 'Add venue'}</button></div></div>
@@ -136,4 +136,3 @@ function Field({ label, hint, optional, error, children }) {
 function slugify(value) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
-

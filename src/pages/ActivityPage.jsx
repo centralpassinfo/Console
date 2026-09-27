@@ -28,7 +28,7 @@ export default function ActivityPage() {
 function AuditDetail({ detail }) {
   if (!detail) return <span className="muted">—</span>;
   if (detail.overrides) {
-    return <span>{Object.entries(detail.overrides).map(([key, value]) => `${humanise(key)} → ${value === null ? 'plan default' : value ? 'on' : 'off'}`).join(', ')}{detail.outcome && <em className={`outcome outcome--${detail.outcome}`}>{detail.outcome}</em>}</span>;
+    return <span>{Object.entries(detail.overrides).map(([key, value]) => `${humanise(key)} → ${value ? 'on' : 'off'}`).join(', ')}{detail.outcome && <em className={`outcome outcome--${detail.outcome}`}>{detail.outcome}</em>}</span>;
   }
   if (detail.name) return <span>{detail.name}{detail.registryStatus ? ` · ${detail.registryStatus}` : ''}</span>;
   if (detail.email) return <span>{detail.email}</span>;

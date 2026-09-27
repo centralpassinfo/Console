@@ -33,7 +33,7 @@ export default function LoginPage() {
         <div className="login-panel__copy">
           <span className="eyebrow"><i /> Internal access only</span>
           <h1>Your venues,<br />under control.</h1>
-          <p>One private view for service health, plans and paid feature access across every CentralPass venue.</p>
+          <p>One private view for service health and individual feature access across every CentralPass venue.</p>
         </div>
         <div className="login-panel__assurance"><Icon name="shield" /><span><strong>Remote control, not a vault.</strong><small>Client payment and admin credentials never live here.</small></span></div>
       </section>
@@ -64,4 +64,3 @@ export default function LoginPage() {
     </main>
   );
 }
-

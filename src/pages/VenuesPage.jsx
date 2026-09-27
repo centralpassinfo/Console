@@ -19,7 +19,7 @@ export default function VenuesPage() {
     const matchesQuery = `${venue.name} ${venue.slug} ${venue.apiUrl}`.toLowerCase().includes(query.toLowerCase());
     const state = venue.live?.state;
     const matchesFilter = filter === 'all'
-      || (filter === 'attention' && (['degraded', 'down', 'unreachable'].includes(state) || venue.live?.platform?.plan === 'unconfigured' || ['missing', 'expiring', 'expired'].includes(venue.contractSummary?.state)))
+      || (filter === 'attention' && (['degraded', 'down', 'unreachable'].includes(state) || ['missing', 'expiring', 'expired'].includes(venue.contractSummary?.state)))
       || filter === state
       || filter === venue.registryStatus;
     return matchesQuery && matchesFilter;
@@ -27,7 +27,7 @@ export default function VenuesPage() {
 
   return (
     <div className="page">
-      <header className="page-header"><div><span className="eyebrow">Registry</span><h1>Venues</h1><p>Connection details, live plans and current service status.</p></div><Link className="button button--primary" to="/venues/new"><Icon name="plus" size={17} />Add venue</Link></header>
+      <header className="page-header"><div><span className="eyebrow">Registry</span><h1>Venues</h1><p>Connection details, enabled features and current service status.</p></div><Link className="button button--primary" to="/venues/new"><Icon name="plus" size={17} />Add venue</Link></header>
       {error && <div className="form-alert form-alert--error"><Icon name="alert" size={18} />{error}</div>}
       <section className="content-card">
         <div className="toolbar">
