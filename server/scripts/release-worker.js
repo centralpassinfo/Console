@@ -6,6 +6,10 @@ const { recordAudit } = require('../src/audit');
 const { deployRelease } = require('../src/release-deployer');
 const { queueAutomaticReleases } = require('../src/automatic-releases');
 const { sourceConfig, syncSource } = require('../src/release-source');
+const {
+  concurrencyLimit,
+  runWorkerQueue,
+} = require('../src/release-concurrency');
 const workerId = randomUUID();
 let stopping = false;
 process.on('SIGTERM', () => {
@@ -14,7 +18,6 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   stopping = true;
 });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function claim() {
   const db = await pool.connect();
   try {
@@ -150,6 +153,12 @@ async function processJob(job) {
 }
 async function main() {
   resolveKey();
+  const concurrency = concurrencyLimit(
+    process.env.RELEASE_VENUE_CONCURRENCY,
+    3,
+    5,
+  );
+  concurrencyLimit(process.env.RELEASE_PORTAL_CONCURRENCY, 3, 3);
   const beat = async () => {
     await pool.query(
       'INSERT INTO console_release_workers(id) VALUES ($1) ON CONFLICT(id) DO UPDATE SET heartbeat_at=NOW()',
@@ -166,18 +175,22 @@ async function main() {
   const timer = setInterval(() => beat().catch(() => {}), 10000);
   let nextSourceSync = 0;
   try {
-    while (!stopping) {
-      if (Date.now() >= nextSourceSync) {
-        nextSourceSync = Date.now() + 60000;
-        // Discovery records failures for Console. A GitHub outage must not
-        // prevent already-published, approved deployments from proceeding.
-        await syncSource().catch(() => {});
-      }
-      await queueAutomaticReleases(pool);
-      const job = await claim();
-      if (job) await processJob(job);
-      else await sleep(3000);
-    }
+    console.log(`Release worker ready: up to ${concurrency} venues at once.`);
+    await runWorkerQueue({
+      claim,
+      processJob,
+      concurrency,
+      shouldStop: () => stopping,
+      reconcile: async () => {
+        if (Date.now() >= nextSourceSync) {
+          nextSourceSync = Date.now() + 60000;
+          // Discovery records failures for Console. A GitHub outage must not
+          // prevent already-published, approved deployments from proceeding.
+          await syncSource().catch(() => {});
+        }
+        await queueAutomaticReleases(pool);
+      },
+    });
   } finally {
     clearInterval(timer);
     await pool.query('DELETE FROM console_release_workers WHERE id=$1', [

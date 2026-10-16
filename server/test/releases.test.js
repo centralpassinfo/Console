@@ -200,7 +200,7 @@ test('deployment subprocess receives only its project token, not Console secrets
   delete process.env.SESSION_SECRET;
   delete process.env.DATABASE_URL;
 });
-test('deployment uploads the pinned source and waits for each component before the next', async () => {
+test('deployment verifies the backend before uploading portals in parallel', async () => {
   const old = process.env.RAILWAY_CLI_PATH;
   process.env.RAILWAY_CLI_PATH = 'railway';
   const directory = await fs.mkdtemp(
@@ -261,8 +261,8 @@ test('deployment uploads the pinned source and waits for each component before t
       'upload:backend-id',
       'verify:backend',
       'upload:admin-id',
-      'verify:admin',
       'upload:staff-id',
+      'verify:admin',
       'verify:staff',
     ]);
   } finally {
@@ -412,6 +412,106 @@ test('a failed backend deployment stops the venue before either frontend upload'
     assert.deepEqual(uploaded, ['backend-id']);
     await assert.rejects(fs.access(directory));
   } finally {
+    if (prior) process.env.RAILWAY_CLI_PATH = prior;
+    else delete process.env.RAILWAY_CLI_PATH;
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('failed parallel portal rollout drains uploads before cleanup and never approves tablets', async () => {
+  const prior = process.env.RAILWAY_CLI_PATH;
+  process.env.RAILWAY_CLI_PATH = 'railway';
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'release-drain-test-'),
+  );
+  let releaseStaff, staffStarted;
+  const staffGate = new Promise((resolve) => {
+    releaseStaff = resolve;
+  });
+  const started = new Promise((resolve) => {
+    staffStarted = resolve;
+  });
+  const uploads = [],
+    deploymentIds = {
+      backend: '12345678-1234-1234-1234-123456789001',
+      admin: '12345678-1234-1234-1234-123456789002',
+      staff: '12345678-1234-1234-1234-123456789003',
+      employee: '12345678-1234-1234-1234-123456789004',
+    };
+  let settled = false,
+    tabletApproved = false;
+  try {
+    const rollout = deployRelease(
+      {
+        release: { ...release, tablet_bundle: { version: '2' } },
+        target: {
+          project_id: uuid,
+          environment_id: uuid,
+          services: {
+            backend: 'backend',
+            admin: 'admin',
+            staff: 'staff',
+            employee: 'employee',
+          },
+          employee_url: 'https://employee',
+        },
+        venue: {
+          api_url: 'https://api',
+          admin_url: 'https://admin',
+          staff_url: 'https://staff',
+        },
+        token: 'token',
+        platformKey: 'key',
+        onProgress: async () => {},
+        assertRunning: async () => {},
+      },
+      {
+        portalConcurrency: 2,
+        prepareSource: async () => ({ directory, source: directory }),
+        execCommand: async (file, args) => {
+          const component = args[args.indexOf('--service') + 1];
+          uploads.push(component);
+          return {
+            stdout: JSON.stringify({ deploymentId: deploymentIds[component] }),
+          };
+        },
+        waitForDeployment: async (id) => {
+          if (id === deploymentIds.admin) {
+            await started;
+            throw new Error('Admin failed');
+          }
+          if (id === deploymentIds.staff) {
+            staffStarted();
+            await staffGate;
+          }
+        },
+        waitForComponent: async () => {},
+        fetcher: async () => {
+          tabletApproved = true;
+          return response({});
+        },
+      },
+    );
+    const outcome = rollout.then(
+      () => {
+        settled = true;
+      },
+      (error) => {
+        settled = true;
+        return error;
+      },
+    );
+    await started;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(uploads, ['backend', 'admin', 'staff']);
+    assert.equal(settled, false);
+    await fs.access(directory);
+    releaseStaff();
+    assert.match((await outcome).message, /Admin failed/);
+    assert.equal(tabletApproved, false);
+    await assert.rejects(fs.access(directory));
+  } finally {
+    releaseStaff();
     if (prior) process.env.RAILWAY_CLI_PATH = prior;
     else delete process.env.RAILWAY_CLI_PATH;
     await fs.rm(directory, { recursive: true, force: true });

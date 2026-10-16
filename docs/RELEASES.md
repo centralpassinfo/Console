@@ -4,7 +4,8 @@ Console now has **Releases**, with individual selection, search, select-all for
 eligible visible venues, and bulk approval. Selection survives search changes;
 the confirmation lists every selected venue, including those outside the filter.
 A bulk approval is atomic in Console: either every selected venue is queued or
-none are. Deployment is independent per venue and sequential within a venue.
+none are. Deployments run independently per venue: its backend is verified first,
+then its configured portals can update in parallel.
 
 Backend and owner dashboard services are required. Staff and employee portals
 are optional: choose **Not used** for either absent portal. Console configures,
@@ -26,6 +27,31 @@ updates and interrupted jobs. An update which was cancelled or failed is not
 retried in a loop. Explicitly turning the policy off and back on can resume an
 automatic update cancelled by opting out. Other failures need review and a new
 manual approval. Newer published releases supersede deferred older releases.
+
+## Deployment speed and concurrency
+
+Each worker handles **three venues at once** by default. Once a venue's backend
+passes deployment and version verification, up to **three configured portals**
+(owner dashboard, staff and employee) build/deploy together. A slow venue does
+not block other venue slots, which refill as individual rollouts finish.
+
+Set `RELEASE_VENUE_CONCURRENCY` (1–5, default 3) and
+`RELEASE_PORTAL_CONCURRENCY` (1–3, default 3) on the worker to tune this. Setting
+either to 1 restores serial operation at that level. Limits apply per worker;
+additional replicas multiply the potential number of simultaneous builds.
+Railway's build capacity can still queue builds, so higher concurrency does not
+guarantee a proportional speed increase. Build caching and dependency installation
+remain separate sources of delay. Progress distinguishes uploading, building and
+verification.
+
+Approval policy, scheduling, one active release per venue, project-token isolation
+and exact deployment/version checks are unchanged. A backend failure prevents all
+of that venue's portal uploads. A portal failure stops unstarted portals; uploads
+already underway finish or report failure before source cleanup and the rollout
+is marked interrupted. Tablet activation runs only after every selected service
+passes verification. Shutdown stops taking new leases and drains active work.
+Deploy worker code updates while no rollouts are running; a forced platform stop
+can still interrupt work despite graceful shutdown.
 
 ### Normal release process
 
@@ -162,7 +188,7 @@ and venues with an update in flight, cannot be approved. Duplicate concurrent
 requests cannot create multiple active rollouts for the same venue.
 
 The worker uploads backend first, verifies its authenticated status and release
-protocol, then updates admin, staff and optional employee portals. Verification
+protocol, then updates configured admin, staff and employee portals in parallel. Verification
 waits for the specific Railway deployment ID to succeed, then checks the public
 manifest **and** the stamped HTML. All services are rechecked
 at the end. A successful upload alone is not success. Progress and approval

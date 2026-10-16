@@ -887,10 +887,10 @@ export default function ReleasesPage() {
                 ))}
               </ul>
               <p>
-                Backend and owner dashboard update first, followed by any
-                configured staff and employee portals. A failure can leave a
-                venue partly updated; progress is recorded separately for each
-                venue.
+                Each venue’s backend updates first. Its configured portals then
+                update in parallel, and several venues can update at once. A
+                failure can leave a venue partly updated; progress is recorded
+                separately for each venue.
               </p>
             </>
           ) : confirm.kind === 'cancel' ? (

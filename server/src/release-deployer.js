@@ -4,6 +4,7 @@ const path = require("node:path");
 const os = require("node:os");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
+const { concurrencyLimit, runLimited } = require("./release-concurrency");
 const exec = promisify(execFile);
 const FOLDERS = {
   backend: "backend",
@@ -298,6 +299,11 @@ async function deployRelease(
   const command = deps.execCommand || run;
   const verify = deps.waitForComponent || waitForComponent;
   const waitDeployment = deps.waitForDeployment || waitForDeployment;
+  const portalConcurrency = concurrencyLimit(
+    deps.portalConcurrency ?? process.env.RELEASE_PORTAL_CONCURRENCY,
+    3,
+    3,
+  );
   const cli =
     process.env.RAILWAY_CLI_PATH ||
     (process.platform === "win32" ? null : "railway");
@@ -313,8 +319,7 @@ async function deployRelease(
       staff: venue.staff_url,
       employee: target.employee_url,
     };
-    for (const component of Object.keys(FOLDERS)) {
-      if (!target.services[component]) continue;
+    async function deployComponent(component) {
       await assertRunning();
       await onProgress(component, "uploading");
       // Upload the full monorepo so shared/ sync scripts see the same approved
@@ -340,11 +345,22 @@ async function deployRelease(
       );
       const deploymentId = deploymentIdFromOutput(result.stdout);
       await onProgress(`${component}_deployment`, deploymentId);
+      await onProgress(component, "building");
       await waitDeployment(deploymentId, token, assertRunning);
       await onProgress(component, "verifying");
       await verify(component, urls[component], release, platformKey);
       await onProgress(component, "verified");
     }
+    // The new backend must be healthy and speak the approval protocol before
+    // any frontend changes. Frontends are independent once that gate passes.
+    await deployComponent("backend");
+    const portals = Object.keys(FOLDERS).filter(
+      (component) => component !== "backend" && target.services[component],
+    );
+    await runLimited(
+      portals.map((component) => () => deployComponent(component)),
+      portalConcurrency,
+    );
     await assertRunning();
     // Recheck every service after the sequence; success is not just an upload.
     for (const component of Object.keys(target.services))
