@@ -49,16 +49,27 @@ function totpAt(secret, timeMs = Date.now(), options = {}) {
   return String(binary % (10 ** digits)).padStart(digits, '0');
 }
 
-function verifyTotp(secret, code, options = {}) {
+/**
+ * The 30-second time step a code belongs to, or null when it matches none in
+ * the window. Callers record the step so the same code cannot be used twice.
+ */
+function matchTotpStep(secret, code, options = {}) {
   const candidate = String(code || '').replace(/\s/g, '');
-  if (!/^\d{6}$/.test(candidate)) return false;
+  if (!/^\d{6}$/.test(candidate)) return null;
   const timeMs = options.timeMs || Date.now();
   const window = options.window ?? 1;
-  for (let step = -window; step <= window; step += 1) {
-    const expected = totpAt(secret, timeMs + step * 30000);
-    if (crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(expected))) return true;
+  let matched = null;
+  for (let offset = -window; offset <= window; offset += 1) {
+    const at = timeMs + offset * 30000;
+    const expected = totpAt(secret, at);
+    // Check every step, not just until the first match, so timing stays even.
+    if (crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(expected))) matched = Math.floor(at / 30000);
   }
-  return false;
+  return matched;
+}
+
+function verifyTotp(secret, code, options = {}) {
+  return matchTotpStep(secret, code, options) !== null;
 }
 
 function otpauthUri({ secret, email, issuer = 'CentralPass Console' }) {
@@ -66,5 +77,5 @@ function otpauthUri({ secret, email, issuer = 'CentralPass Console' }) {
   return `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }
 
-module.exports = { encodeBase32, decodeBase32, generateTotpSecret, totpAt, verifyTotp, otpauthUri };
+module.exports = { encodeBase32, decodeBase32, generateTotpSecret, totpAt, matchTotpStep, verifyTotp, otpauthUri };
 

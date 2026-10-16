@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import Icon from './Icon.jsx';
 import { ContractBadge } from './ContractPanel.jsx';
+import { BillingBadge } from './BillingPanel.jsx';
 import { StatusBadge } from './Status.jsx';
 import { formatNumber, relativeTime } from '../format.js';
 
@@ -13,7 +14,7 @@ export default function VenueTable({ venues }) {
             <th>Venue</th>
             <th>Status</th>
             <th>Features on</th>
-            <th>Contract</th>
+            <th>Commercial</th>
             <th className="numeric">Orders today</th>
             <th className="numeric">Customers</th>
             <th>Last checked</th>
@@ -25,8 +26,9 @@ export default function VenueTable({ venues }) {
             const live = venue.live || { state: 'checking' };
             const platform = live.platform || {};
             const contractState = venue.contractSummary?.state || 'missing';
-            const contractWarning = ['missing', 'expiring', 'expired'].includes(contractState);
+            const contractWarning = ['missing', 'expiring', 'expired'].includes(contractState) || venue.billingSummary?.state === 'overdue';
             const trouble = ['down', 'unreachable'].includes(live.state);
+            const stoppedUpdate = ['interrupted', 'failed'].includes(venue.latestRollout?.status);
             return (
               <tr key={venue.id} className={`${trouble ? 'is-trouble' : ''}${contractWarning ? ' is-warning' : ''}`}>
                 <td data-label="Venue">
@@ -38,9 +40,10 @@ export default function VenueTable({ venues }) {
                 <td data-label="Status">
                   <StatusBadge state={live.state || 'checking'} />
                   {live.error && <small className="status-detail" title={live.error}>{live.error}</small>}
+                  {stoppedUpdate && <Link className="status-detail status-detail--link" to={`/releases?venue=${venue.id}`}>Update {venue.latestRollout.status}, resolve in Releases</Link>}
                 </td>
                 <td data-label="Features on">{platform.features ? Object.values(platform.features).filter(Boolean).length : '—'}</td>
-                <td data-label="Contract"><ContractBadge state={contractState} /></td>
+                <td data-label="Commercial"><span className="badge-stack"><ContractBadge state={contractState} />{venue.billingSummary?.state === 'overdue' && <BillingBadge state="overdue" />}</span></td>
                 <td data-label="Orders today" className="numeric metric-cell">{platform.counts ? formatNumber(platform.counts.orders_today) : '—'}</td>
                 <td data-label="Customers" className="numeric metric-cell">{platform.counts ? formatNumber(platform.counts.customers) : '—'}</td>
                 <td data-label="Last checked"><span title={live.checkedAt}>{relativeTime(live.checkedAt)}</span>{live.latencyMs != null && <small className="latency">{live.latencyMs} ms</small>}</td>

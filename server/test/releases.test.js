@@ -20,14 +20,14 @@ const {
 const sha = 'a'.repeat(40),
   uuid = '12345678-1234-1234-1234-123456789012';
 const release = { version: '1.9.0', commit_sha: sha };
-test('schedules use Sydney time independently of the host timezone', async () => {
+test('schedules use Adelaide time independently of the host timezone', async () => {
   const { releaseScheduleUtc, formatReleaseTime } =
     await import('../../src/releaseTime.mjs');
   assert.equal(
     releaseScheduleUtc('2026-10-17T18:00'),
-    '2026-10-17T07:00:00.000Z',
+    '2026-10-17T07:30:00.000Z',
   );
-  assert.match(formatReleaseTime('2026-10-17T07:00:00Z'), /6:00 pm/);
+  assert.match(formatReleaseTime('2026-10-17T07:30:00Z'), /6:00 pm/);
   assert.throws(
     () => releaseScheduleUtc('2026-10-04T02:30'),
     /daylight-saving/,

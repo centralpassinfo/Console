@@ -4,6 +4,15 @@ import { api } from '../api.js';
 import Icon from '../components/Icon.jsx';
 import VenueTable from '../components/VenueTable.jsx';
 import { formatNumber, formatDateTime } from '../format.js';
+import { needsAttention } from '../attention.js';
+import { localHour } from '../timezone.mjs';
+
+function greeting() {
+  const hour = localHour();
+  if (hour < 12) return 'Good morning.';
+  if (hour < 18) return 'Good afternoon.';
+  return 'Good evening.';
+}
 
 export default function OverviewPage() {
   const [venues, setVenues] = useState([]);
@@ -38,7 +47,7 @@ export default function OverviewPage() {
     return {
       total: active.length,
       operational: active.filter((venue) => venue.live?.state === 'online').length,
-      attention: active.filter((venue) => ['degraded', 'down', 'unreachable'].includes(venue.live?.state) || ['missing', 'expiring', 'expired'].includes(venue.contractSummary?.state)).length,
+      attention: active.filter(needsAttention).length,
       orders: active.reduce((sum, venue) => sum + Number(venue.live?.platform?.counts?.orders_today || 0), 0),
     };
   }, [venues]);
@@ -46,7 +55,7 @@ export default function OverviewPage() {
   return (
     <div className="page">
       <header className="page-header">
-        <div><span className="eyebrow">Fleet overview</span><h1>Good afternoon.</h1><p>Live service health and venue activity across CentralPass.</p></div>
+        <div><span className="eyebrow">Fleet overview</span><h1>{greeting()}</h1><p>Live service health and venue activity across CentralPass.</p></div>
         <div className="page-header__actions">
           {checkedAt && <span className="last-refresh">Last refresh<br /><strong>{formatDateTime(checkedAt)}</strong></span>}
           <button className="button button--secondary" type="button" onClick={() => load(true)} disabled={refreshing}><Icon name="refresh" size={17} className={refreshing ? 'spin' : ''} />{refreshing ? 'Refreshing' : 'Refresh'}</button>
@@ -59,7 +68,7 @@ export default function OverviewPage() {
       <section className="summary-grid" aria-label="Venue summary">
         <article className="summary-card"><div className="summary-card__icon summary-card__icon--blue"><Icon name="venues" /></div><span>Managed venues</span><strong>{loading ? '—' : summary.total}</strong><small>Active registry records</small></article>
         <article className="summary-card"><div className="summary-card__icon summary-card__icon--green"><Icon name="signal" /></div><span>Operational now</span><strong>{loading ? '—' : `${summary.operational}/${summary.total}`}</strong><small>{summary.total && summary.operational === summary.total ? 'All systems responding' : 'Based on latest check'}</small></article>
-        <article className={`summary-card${summary.attention ? ' summary-card--attention' : ''}`}><div className="summary-card__icon summary-card__icon--amber"><Icon name="alert" /></div><span>Needs attention</span><strong>{loading ? '—' : summary.attention}</strong><small>Service or contract issues</small></article>
+        <article className={`summary-card${summary.attention ? ' summary-card--attention' : ''}`}><div className="summary-card__icon summary-card__icon--amber"><Icon name="alert" /></div><span>Needs attention</span><strong>{loading ? '—' : summary.attention}</strong><small>Service, contract, billing or update issues</small></article>
         <article className="summary-card"><div className="summary-card__icon summary-card__icon--ink"><Icon name="orders" /></div><span>Orders today</span><strong>{loading ? '—' : formatNumber(summary.orders)}</strong><small>Across responding venues</small></article>
       </section>
 

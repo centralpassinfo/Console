@@ -15,9 +15,11 @@ those services. Reconnecting a venue preserves its saved optional selections.
 ## Automatic updates for selected venues
 
 Every venue starts with **Automatic updates off**. The switch on each venue row
-changes only that venue. Turning it on queues the latest available release when
-the venue is ready, then new published releases deploy without a separate
-approval. Turning it off cancels queued automatic work and restores manual
+changes only that venue. Turning it on queues the latest CI-tested release when
+the venue is ready, then new releases that passed Platform CI (found by GitHub
+discovery or pushed by the workflow) deploy without a separate approval. A
+release registered by hand in Console always needs approval, even for these
+venues, because CI has not vouched for its commit. Turning it off cancels queued automatic work and restores manual
 approval; already-started deployments finish. The confirmation names the venue
 and explains this behavior. Switch changes and automatic deployments are audited.
 
@@ -112,13 +114,16 @@ setup before claiming that production updates require Console approval:
 2. Use **Releases → Configure → Connect Railway** for each venue. Paste its
    production-environment project token, click **Find services**, review the
    discovered project/environment and service names, then **Connect venue**.
-   Automatic configuration also requires a **workspace setup token** once per
-   Railway workspace. Create it in Railway **Account settings → Tokens**, selecting
-   the workspace containing the venue project. Enter it in the setup field after
-   discovery. Project tokens can discover/deploy, while service configuration uses
-   workspace access. Console encrypts this separate credential and reuses it only
-   for setup of projects in the same workspace; it never enters rollout snapshots
-   or deployment subprocesses. A read-only access check runs before changes.
+   Automatic configuration also requires a **workspace setup token** each time a
+   venue is connected or reconnected. Create it in Railway **Account settings,
+   Tokens**, selecting the workspace containing the venue project, and enter it in
+   the setup field after discovery. Project tokens can discover/deploy, while
+   service configuration uses workspace access. Because a workspace token can
+   manage every project in the workspace, Console uses it for that one request
+   and **never stores it**; delete it in Railway afterwards. It never enters
+   rollout snapshots or deployment subprocesses. A read-only access check runs
+   before changes. (Earlier builds kept it encrypted; migration 007 now drops
+   that table, so revoke any workspace token created for Console before.)
    Console sets the selected services' component root folders and disables
    their Railway GitHub automatic deployments, then reads both settings back
    before saving. IDs and public portal addresses are discovered automatically;
@@ -170,17 +175,18 @@ these dependencies. Run the normal Console migration before starting the worker.
 Normal web releases appear from successful GitHub builds. **Advanced → Register
 release manually** remains available for deliberate manual releases and installed
 tablet bundles; it requires a unique version, full commit SHA and release notes.
-Manual registration also queues opted-in automatic venues immediately, so use
-a tested commit. These records cannot be edited through the API. Code is fetched from the worker's
+Manual registration never queues automatic venues; approve it explicitly, and
+still use a tested commit. These records cannot be edited through the API. Code is fetched from the worker's
 configured repository and the fetched commit is checked for exact equality.
 Changing `main` later cannot change an approved commit. The worker stamps a
 release manifest into each exported component before upload. Dependencies and
 build environments must remain controlled; this is a pinned source release,
 not a claim of bit-for-bit reproducible build artifacts.
 
-Select one or multiple venues, optionally schedule a Sydney date/time (stored in
-UTC, within 90 days), review the exact venue list and approve. The form and
-history explicitly use Sydney time regardless of the server/browser timezone;
+Select one or multiple venues, optionally schedule an Adelaide date/time (stored
+in UTC, within 90 days), review the exact venue list and approve. Every venue
+trades in South Australia, so the form, history and the rest of Console use
+Adelaide time regardless of the server/browser timezone;
 skipped or repeated daylight-saving times are rejected. Manual approval never
 selects every venue by default. Automatic approval only applies to venues
 explicitly opted in. Suspended/offboarded/unconfigured venues,
@@ -192,8 +198,16 @@ protocol, then updates configured admin, staff and employee portals in parallel.
 waits for the specific Railway deployment ID to succeed, then checks the public
 manifest **and** the stamped HTML. All services are rechecked
 at the end. A successful upload alone is not success. Progress and approval
-identity are recorded per venue. The list shows the last *verified* release;
-it is historical evidence, not continuous monitoring of manual Railway changes.
+identity are recorded per venue. The list shows both what each venue reports it
+is **running now** and the last release Console *verified* there, and flags a
+venue whose running commit differs (for example after a manual Railway deploy).
+A venue whose backend Console has never deployed shows "Not deployed by Console".
+The worker reads the venue's current platform key and addresses when a job
+starts, so rotating a key or changing a domain after a scheduled approval does
+not fail verification. Railway's SLEEPING state counts as deployed; a deployment
+Railway holds as NEEDS_APPROVAL fails at once with instructions rather than
+waiting for the timeout. Interrupted and failed updates count towards the
+Overview's **Needs attention**.
 Open browser sessions receive frontend updates on their next reload; the worker
 does not force a reload during service. Customer storefronts and native APKs are
 separate products and are not deployed by this worker.
@@ -212,9 +226,21 @@ bundle. Fresh uploads are inactive; venue-admin activation and rollback now
 return an explicit Console approval error. The device update and download
 endpoints only serve the active bundle recorded in the approval table.
 
-To include a tablet update, upload the inactive ZIP through each venue's existing
-admin bundle API first (`activate=false`). Create the Console release with the
-tablet app ID, channel, bundle version and exact ZIP SHA-256 checksum. Every
+**Normal path: approve a bundle on its own.** Upload the ZIP to a venue with
+`npm run publish:bundle -- --version 1.0.1` in `staff-dashboard` (uploads are
+always inactive now). Then open the venue in Console: **Tablet app updates**
+lists that venue's uploaded bundles with version, channel, size, checksum and
+which one tablets are served. **Approve** sends the exact bundle ID and checksum;
+Console re-reads the venue's list, refuses a suspended venue or one with a
+platform update in flight, and approves against the backend commit the venue is
+running now. Approving an older bundle is a rollback. No platform deployment is
+needed. A venue whose backend Console has not deployed yet cannot take an
+approval (its backend has no release manifest to match); deploy a release first.
+Every approval is audited, including whether it was a rollback.
+
+**With a platform release.** To ship a bundle together with a web release,
+upload the inactive ZIP to each venue first, then create the Console release with
+the tablet app ID, channel, bundle version and exact ZIP SHA-256 checksum. Every
 selected venue must have those bytes staged. Once the web rollout is verified,
 the worker calls the platform-key-only approval endpoint, which checks the
 running release commit and exact uploaded bundle, activates it transactionally
@@ -231,6 +257,10 @@ tablet integration tests use `TABLET_RELEASE_TEST_DATABASE_URL` and fresh local
 `centralpass_tablet_test...` databases. No production credentials are needed.
 Discovery integration tests use `DISCOVERY_TEST_DATABASE_URL` with a fresh local
 `centralpass_release_test...` database; external provider responses are simulated.
+`CONSOLE_TEST_DATABASE_URL` (a fresh local `centralpass_console_test...` database)
+runs the whole app with real sessions against a stand-in venue: contract upload,
+billing, venue summaries, one-time authenticator codes, operator changes ending
+sessions, and tablet approval and rollback.
 
 Provider behavior follows Railway's [CLI deployment documentation](https://docs.railway.com/cli/deploying),
 [automatic deployment controls](https://docs.railway.com/deployments/github-autodeploys),

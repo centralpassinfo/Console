@@ -236,20 +236,14 @@ export function RailwaySetupDialog({ target, onClose, onSaved, onAdvanced }) {
               <span>Environment: {discovery.environmentName}</span>
             </div>
             <label>
-              {discovery.setupConnected
-                ? 'Replace workspace setup token (optional)'
-                : 'Railway workspace token for setup'}
+              Railway workspace token for setup
               <input
                 type="password"
                 autoComplete="new-password"
-                required={!discovery.setupConnected}
+                required
                 value={setupToken}
                 onChange={(e) => setSetupToken(e.target.value)}
-                placeholder={
-                  discovery.setupConnected
-                    ? 'Saved setup access will be used'
-                    : 'Paste workspace token once for this workspace'
-                }
+                placeholder="Paste a workspace token for this connection"
               />
             </label>
             <p>
@@ -259,11 +253,12 @@ export function RailwaySetupDialog({ target, onClose, onSaved, onAdvanced }) {
                 target="_blank"
                 rel="noreferrer"
               >
-                Railway account settings → Tokens
+                Railway account settings, Tokens
               </a>
               , create a token for the workspace containing this project.
-              Console encrypts and reuses it for venue setup in that workspace.
-              Deployments continue using each venue’s project token.
+              Console uses it for this connection only and does not store it,
+              because it can manage every project in the workspace. Delete it in
+              Railway afterwards. Deployments use this venue’s project token.
             </p>
             <p>
               Confirm which service runs each part of this venue. Matches are

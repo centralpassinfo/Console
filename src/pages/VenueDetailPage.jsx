@@ -4,6 +4,9 @@ import { api } from '../api.js';
 import Icon from '../components/Icon.jsx';
 import Modal from '../components/Modal.jsx';
 import ContractPanel from '../components/ContractPanel.jsx';
+import BillingPanel from '../components/BillingPanel.jsx';
+import TabletPanel from '../components/TabletPanel.jsx';
+import { releaseLabel } from '../releaseLabel.mjs';
 import { StatusBadge } from '../components/Status.jsx';
 import { formatDateTime, formatNumber, humanise } from '../format.js';
 
@@ -76,6 +79,15 @@ export default function VenueDetailPage() {
             <div><span>Response time</span><strong>{live?.latencyMs != null ? `${live.latencyMs} ms` : '—'}</strong></div>
             <div><span>Last checked</span><strong className="metric-date">{live?.checkedAt ? formatDateTime(live.checkedAt) : '—'}</strong></div>
           </div>
+          {featureState && (
+            <div className="service-release">
+              <Icon name="refresh" size={16} />
+              {featureState.release?.commit
+                ? <span title={featureState.release.commit}>Running <strong>{releaseLabel({ version: featureState.release.version, commit_sha: featureState.release.commit })}</strong>{!featureState.release.version?.startsWith('commit-') && <> <code>{featureState.release.commit.slice(0, 8)}</code></>}</span>
+                : <span>Running a release <strong>not deployed by Console</strong>. Its version is unknown until Console deploys one.</span>}
+              <Link to={`/releases?venue=${id}`}>Updates</Link>
+            </div>
+          )}
         </article>
         <article className="content-card links-card">
           <div className="content-card__header"><div><h2>Venue surfaces</h2><p>Open the venue’s own customer and team tools.</p></div></div>
@@ -88,7 +100,8 @@ export default function VenueDetailPage() {
         </article>
       </section>
 
-      <ContractPanel venueId={venue.id} initialContracts={contracts} />
+      <ContractPanel venueId={venue.id} initialContracts={contracts} onContractsChange={(next) => setData((current) => ({ ...current, contracts: next }))} />
+      <BillingPanel venueId={venue.id} contracts={contracts} />
 
       <section className="content-card feature-panel">
         <div className="content-card__header content-card__header--feature"><div><span className="eyebrow">Venue features</span><h2>Feature access</h2><p>Switch on exactly what this venue uses. Every change takes effect immediately and is audited. A new venue starts with all features off.</p></div></div>
@@ -109,6 +122,8 @@ export default function VenueDetailPage() {
           </div>
         ) : <div className="unavailable-block"><Icon name="signal" /><h3>Feature data unavailable</h3><p>Restore the venue API connection to inspect or change entitlements.</p></div>}
       </section>
+
+      {featureState && venue.registryStatus !== 'offboarded' && <TabletPanel venueId={venue.id} venueName={venue.name} />}
 
       <section className="detail-grid">
         <article className="content-card audit-card">

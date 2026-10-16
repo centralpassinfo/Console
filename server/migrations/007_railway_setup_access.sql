@@ -1,6 +1,4 @@
--- Setup credentials are separate from environment-scoped deployment tokens.
-CREATE TABLE IF NOT EXISTS console_railway_setup_access (
-  scope TEXT PRIMARY KEY,
-  setup_token TEXT NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- Railway workspace setup tokens were once kept here. A workspace token can
+-- manage every project in the workspace, so Console no longer stores one:
+-- connecting a venue asks for it, uses it, and forgets it.
+DROP TABLE IF EXISTS console_railway_setup_access;

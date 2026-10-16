@@ -39,8 +39,15 @@ function deriveSummary(contracts) {
   return { state, nextExpiry: expiries[0] || null };
 }
 
-export default function ContractPanel({ venueId, initialContracts = [] }) {
-  const [contracts, setContracts] = useState(initialContracts);
+export default function ContractPanel({ venueId, initialContracts = [], onContractsChange }) {
+  const [contracts, setContractList] = useState(initialContracts);
+  // The billing panel prefills fees from the current contract, so keep the
+  // venue page's copy in step with uploads and edits made here.
+  function setContracts(update) {
+    const next = update(contracts);
+    setContractList(next);
+    onContractsChange?.(next);
+  }
   const [form, setForm] = useState(EMPTY_FORM);
   const [file, setFile] = useState(null);
   const [editingId, setEditingId] = useState(null);

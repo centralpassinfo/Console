@@ -2,8 +2,13 @@
 
 const fs = require('fs');
 const path = require('path');
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 const { config } = require('./config');
+
+// A DATE column is a calendar day, not an instant. pg's default turns it into a
+// Date at local midnight, which shifts it by a day once serialised from any
+// host east of UTC. Keep it as the YYYY-MM-DD text Postgres stored.
+types.setTypeParser(types.builtins.DATE, (value) => value);
 
 const pool = new Pool({
   connectionString: config.databaseUrl,

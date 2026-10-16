@@ -13,14 +13,34 @@ import {
   ReleaseSourceCard,
   RailwaySetupDialog,
 } from '../components/ReleaseConnections.jsx';
-function releaseLabel(release) {
-  return release.source_run_number
-    ? `Build ${release.source_run_number}`
-    : release.version?.startsWith('commit-')
-      ? `Update ${release.commit_sha.slice(0, 8)}`
-      : release.version;
-}
+import { progressSteps, releaseLabel } from '../releaseLabel.mjs';
+import { CONSOLE_TIMEZONE_LABEL } from '../timezone.mjs';
+const testedByCi = (release) =>
+  Boolean(release.source_run_id) ||
+  ['GitHub CI', 'Platform CI'].includes(release.created_by);
 const active = ['queued', 'deploying', 'verifying', 'interrupted'];
+// What a venue reports it is running, against what Console last verified there.
+function RunningRelease({ live, lastVerified }) {
+  if (!live) return <span className="muted">Checking…</span>;
+  if (live.state !== 'online' && !live.platform)
+    return <span className="muted">Unavailable</span>;
+  const running = live.platform?.release;
+  if (!running?.commit)
+    return (
+      <span>
+        Not deployed by Console
+        <small>Version unknown until Console deploys one</small>
+      </span>
+    );
+  const drift =
+    lastVerified?.commit_sha && lastVerified.commit_sha !== running.commit;
+  return (
+    <span className={drift ? 'release-drift' : ''}>
+      {releaseLabel({ version: running.version, commit: running.commit })}
+      {drift && <small>Differs from the last release Console verified</small>}
+    </span>
+  );
+}
 const emptyRelease = {
   version: '',
   commitSha: '',
@@ -72,6 +92,7 @@ export default function ReleasesPage() {
       setTarget(null);
     },
   });
+  const [liveVenues, setLiveVenues] = useState(new Map());
   const load = useCallback(async () => {
     try {
       setData(await api('/releases'));
@@ -80,11 +101,26 @@ export default function ReleasesPage() {
       setError(e.message);
     }
   }, []);
+  // Each venue's own report of what it runs. Slower than the release list, so
+  // it loads separately and less often.
+  const loadLive = useCallback(async () => {
+    try {
+      const { venues: list } = await api('/venues');
+      setLiveVenues(new Map(list.map((v) => [v.id, v.live])));
+    } catch {
+      /* The release list still works without live versions. */
+    }
+  }, []);
   useEffect(() => {
     load();
+    loadLive();
     const timer = setInterval(load, 15000);
-    return () => clearInterval(timer);
-  }, [load]);
+    const liveTimer = setInterval(loadLive, 60000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(liveTimer);
+    };
+  }, [load, loadLive]);
   const venues = data?.venues || [],
     releases = data?.releases || [],
     rollouts = data?.rollouts || [];
@@ -138,8 +174,8 @@ export default function ReleasesPage() {
       setNewRelease(null);
       setNotice(
         automaticallyQueued
-          ? `Release ${r.version} queued automatically for ${automaticallyQueued} venue${automaticallyQueued === 1 ? '' : 's'}. Other venues still require approval.`
-          : `Release ${r.version} is ready for approval.`,
+          ? `${releaseLabel(r)} queued automatically for ${automaticallyQueued} venue${automaticallyQueued === 1 ? '' : 's'}. Other venues still require approval.`
+          : `${releaseLabel(r)} is ready for approval. A release registered by hand always needs approval, even for automatic-update venues.`,
       );
       await load();
     } catch (e) {
@@ -310,13 +346,13 @@ export default function ReleasesPage() {
                   <option value="">Select a release</option>
                   {releases.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {releaseLabel(r)} · {r.notes.split('\n')[0].slice(0, 85)}
+                      {`${releaseLabel(r)}${testedByCi(r) ? '' : ' (registered by hand)'} · ${r.notes.split('\n')[0].slice(0, 85)}`}
                     </option>
                   ))}
                 </select>
               </label>
               <label>
-                Deploy at (Sydney time)
+                Deploy at ({CONSOLE_TIMEZONE_LABEL})
                 <input
                   aria-label="Deploy at"
                   type="datetime-local"
@@ -417,7 +453,8 @@ export default function ReleasesPage() {
                       />
                     </th>
                     <th>Venue</th>
-                    <th>Last verified release</th>
+                    <th>Running now</th>
+                    <th>Last verified by Console</th>
                     <th>Update access</th>
                     <th>Automatic updates</th>
                     <th>Setup</th>
@@ -426,7 +463,7 @@ export default function ReleasesPage() {
                 <tbody>
                   {filtered.map((v) => (
                     <tr key={v.id}>
-                      <td>
+                      <td className="release-table__select">
                         <input
                           type="checkbox"
                           aria-label={`Select ${v.name}`}
@@ -435,12 +472,29 @@ export default function ReleasesPage() {
                           onChange={() => toggle(v.id)}
                         />
                       </td>
-                      <td>
+                      <td className="release-table__venue">
                         <Link to={`/venues/${v.id}`}>{v.name}</Link>
                         <small>{v.slug}</small>
                       </td>
-                      <td>{v.last_verified_version || 'Not recorded'}</td>
-                      <td>
+                      <td data-label="Running now">
+                        <RunningRelease
+                          live={liveVenues.get(v.id)}
+                          lastVerified={v.last_verified}
+                        />
+                      </td>
+                      <td data-label="Last verified by Console">
+                        {v.last_verified ? (
+                          <span>
+                            {releaseLabel(v.last_verified)}
+                            <small>
+                              {formatDateTime(v.last_verified.finished_at)}
+                            </small>
+                          </span>
+                        ) : (
+                          'Not recorded'
+                        )}
+                      </td>
+                      <td data-label="Update access">
                         <span>
                           {blocking.get(v.id)?.status ||
                             (v.status !== 'active'
@@ -450,7 +504,7 @@ export default function ReleasesPage() {
                                 : 'Setup required')}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Automatic updates">
                         <button
                           type="button"
                           role="switch"
@@ -475,11 +529,11 @@ export default function ReleasesPage() {
                         </button>
                         <small>
                           {v.automatic_updates
-                            ? 'New releases go live automatically'
+                            ? 'CI-tested releases go live automatically'
                             : 'Approval required'}
                         </small>
                       </td>
-                      <td>
+                      <td data-label="Setup">
                         <button
                           className="button button--secondary"
                           disabled={blocking.has(v.id)}
@@ -544,7 +598,7 @@ export default function ReleasesPage() {
                   <article key={job.id} className="release-job">
                     <div>
                       <strong>
-                        {job.venue_name} · {job.version}
+                        {job.venue_name} · {releaseLabel(job)}
                       </strong>
                       <small>
                         {job.approval_mode === 'automatic'
@@ -553,13 +607,11 @@ export default function ReleasesPage() {
                         · Scheduled {formatDateTime(job.scheduled_at)}
                       </small>
                       <div className="release-progress">
-                        {Object.entries(job.progress || {}).map(
-                          ([key, value]) => (
-                            <span key={key}>
-                              {key}: {value}
-                            </span>
-                          ),
-                        )}
+                        {progressSteps(job.progress).map((step) => (
+                          <span key={step.key}>
+                            {step.label}: {step.state}
+                          </span>
+                        ))}
                       </div>
                       {job.error && (
                         <p className="release-error">{job.error}</p>
@@ -613,9 +665,9 @@ export default function ReleasesPage() {
           <form className="content-card release-form" onSubmit={saveRelease}>
             <h2>New release</h2>
             <p>
-              Use a tested commit from the configured Platform repository.
-              Automatic-update venues will queue this release. Other venues
-              require approval.
+              Use a tested commit from the configured Platform repository. A
+              release registered here always needs approval, even for venues
+              with automatic updates, because CI has not vouched for it.
             </p>
             <div className="release-fields">
               <label>
@@ -668,7 +720,9 @@ export default function ReleasesPage() {
               <>
                 <p>
                   Upload the inactive bundle to each selected venue first.
-                  Approval checks its exact checksum.
+                  Approval checks its exact checksum. To update only the tablet
+                  app, approve the bundle from the venue’s page instead; that
+                  needs no platform deployment.
                 </p>
                 <div className="release-fields">
                   {[
@@ -845,7 +899,7 @@ export default function ReleasesPage() {
             confirm.kind === 'policy'
               ? `${confirm.enabled ? 'Enable automatic updates' : 'Require approval'} · ${confirm.venue.name}`
               : confirm.kind === 'approve'
-                ? `Approve ${confirm.release.version}`
+                ? `Approve ${releaseLabel(confirm.release)}`
                 : confirm.kind === 'cancel'
                   ? 'Cancel queued update'
                   : 'Resolve interrupted deployment'
@@ -868,13 +922,13 @@ export default function ReleasesPage() {
           {confirm.kind === 'policy' ? (
             <p>
               {confirm.enabled
-                ? `New published releases will deploy to ${confirm.venue.name} without per-release approval. The latest available release will be queued when this venue is ready.`
+                ? `Releases that passed Platform CI will deploy to ${confirm.venue.name} without per-release approval. The latest tested release is queued when this venue is ready. Releases registered by hand still need approval.`
                 : `${confirm.venue.name} will require approval for future releases. Queued automatic updates will be cancelled; any deployment already running will finish.`}
             </p>
           ) : confirm.kind === 'approve' ? (
             <>
               <p>
-                Deploy <strong>{confirm.release.version}</strong> (
+                Deploy <strong>{releaseLabel(confirm.release)}</strong> (
                 {confirm.release.commit_sha.slice(0, 8)}){' '}
                 {confirm.scheduledAt
                   ? `at ${formatDateTime(confirm.scheduledAt)}`

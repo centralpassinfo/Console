@@ -12,6 +12,12 @@ export function AuthProvider({ children }) {
       .then((payload) => setUser(payload.user))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
+    const signedOut = () => {
+      setCsrfToken(null);
+      setUser(null);
+    };
+    window.addEventListener('console:signed-out', signedOut);
+    return () => window.removeEventListener('console:signed-out', signedOut);
   }, []);
 
   const value = useMemo(() => ({

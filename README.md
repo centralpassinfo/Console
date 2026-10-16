@@ -2,14 +2,23 @@
 
 Internal operations and entitlement control for CentralPass venue deployments.
 
-The console is intentionally a **remote control, not a vault**. It stores only
-CentralPass's own per-venue `PLATFORM_API_KEY`, encrypted with AES-256-GCM. It
+The console is intentionally a **remote control, not a vault**. Its secrets are
+CentralPass's own: each venue's `PLATFORM_API_KEY` and Railway project token, and
+the shared GitHub read token for release discovery, all encrypted with
+AES-256-GCM and never returned to the browser. A Railway workspace token, which
+could manage every project, is used once during venue setup and not stored. It
 does not store or display client Stripe keys, venue admin passwords, JWT
 secrets, R2 credentials, SMS credentials, customer records, orders or menus.
 
 ## What is included
 
 - Mandatory email/password plus TOTP authenticator sign-in; no public signup.
+  Each authenticator code works once, and every request rechecks that the
+  operator is still active.
+- **Operators** page to add operators, deactivate or reactivate them, and reset a
+  password or authenticator. Each change is confirmed with the acting operator's
+  own code, ends the affected operator's sessions, and is audited. Console always
+  keeps at least one active operator.
 - PostgreSQL-backed venue registry and session storage.
 - Parallel venue checks with an independent five-second timeout per venue.
 - Fleet summary for availability, enabled features, orders today and customer count.
@@ -24,6 +33,14 @@ secrets, R2 credentials, SMS credentials, customer records, orders or menus.
   for the separate worker and the required production auto-deploy cutover.
 - Per-venue contract records with encrypted PDF storage, commercial terms,
   renewal dates and missing/expiring agreement warnings.
+- Per-venue invoices and payments: record what CentralPass billed (fees prefill
+  from the current contract, GST at 10%) and what arrived. Paid, part paid and
+  overdue are derived from payments and today's Adelaide date; overdue invoices
+  appear on the venue list and in **Needs attention**.
+- Tablet app updates approved per venue from the venue page, including rollback,
+  without a platform deployment.
+- Times and "today" in Adelaide time (`CONSOLE_TIMEZONE` on the server, default
+  `Australia/Adelaide`), because every venue trades in South Australia.
 - Responsive desktop/mobile UI aligned to the CentralPass marketing brand.
 
 ## Venue contracts

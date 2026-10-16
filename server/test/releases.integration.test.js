@@ -24,13 +24,17 @@ test(
     );
     await migrate();
     await migrate(); // Startup migrations are idempotent.
+    // requireAuth checks a real, active operator behind every session.
+    await pool.query(
+      "INSERT INTO console_users(id,email,name,password_hash,totp_secret) VALUES(1,'ops@test','Test operator','x','x')",
+    );
     const express = require("express");
     const app = express();
     app.use(express.json());
     app.use((req, res, next) => {
       if (req.get("X-Test-Identity"))
         req.session = {
-          user: { name: "Test operator" },
+          user: { id: 1, name: "Test operator" },
           csrfToken: "test-csrf",
         };
       next();

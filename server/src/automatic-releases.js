@@ -71,6 +71,18 @@ async function queueAutomaticForVenue(
   );
   return job.id;
 }
+// Only a release that passed Platform CI may go out without a person approving
+// it: one found by GitHub discovery or pushed by the CI workflow. A release
+// registered by hand in Console can name any commit, so it always needs approval.
+const TESTED_RELEASE = `source_run_id IS NOT NULL OR created_by IN ('GitHub CI', 'Platform CI')`;
+async function latestTestedRelease(db) {
+  const {
+    rows: [release],
+  } = await db.query(
+    `SELECT * FROM console_releases WHERE ${TESTED_RELEASE} ORDER BY id DESC LIMIT 1`,
+  );
+  return release || null;
+}
 async function queueAutomaticReleases(pool) {
   const db = await pool.connect();
   try {
@@ -80,11 +92,7 @@ async function queueAutomaticReleases(pool) {
     const { rows: venues } = await db.query(
       "SELECT * FROM venues WHERE automatic_updates AND status='active' ORDER BY id FOR UPDATE SKIP LOCKED",
     );
-    const {
-      rows: [release],
-    } = await db.query(
-      'SELECT * FROM console_releases ORDER BY id DESC LIMIT 1',
-    );
+    const release = await latestTestedRelease(db);
     const queued = [];
     for (const venue of venues) {
       const id = await queueAutomaticForVenue(db, venue, release);
@@ -99,4 +107,8 @@ async function queueAutomaticReleases(pool) {
     db.release();
   }
 }
-module.exports = { queueAutomaticForVenue, queueAutomaticReleases };
+module.exports = {
+  latestTestedRelease,
+  queueAutomaticForVenue,
+  queueAutomaticReleases,
+};

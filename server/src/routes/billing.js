@@ -16,6 +16,7 @@ const {
   publicInvoice,
   publicPayment,
 } = require('../billing');
+const { loadLedger } = require('../billing-store');
 
 const router = express.Router();
 
@@ -32,29 +33,6 @@ async function findInvoice(venueId, invoiceId) {
     [invoiceId, venueId]
   );
   return invoice;
-}
-
-/** Every invoice for a venue, each with its payments and derived state. */
-async function loadLedger(venueId) {
-  const { rows: invoices } = await pool.query(
-    `SELECT * FROM venue_invoices WHERE venue_id = $1 ORDER BY issued_on DESC, id DESC`,
-    [venueId]
-  );
-  const { rows: payments } = await pool.query(
-    `SELECT * FROM venue_payments WHERE venue_id = $1 ORDER BY received_on ASC, id ASC`,
-    [venueId]
-  );
-
-  const byInvoice = new Map();
-  for (const payment of payments) {
-    if (!byInvoice.has(payment.invoice_id)) byInvoice.set(payment.invoice_id, []);
-    byInvoice.get(payment.invoice_id).push(payment);
-  }
-
-  return invoices.map((invoice) => {
-    const invoicePayments = byInvoice.get(invoice.id) || [];
-    return { invoice, payments: invoicePayments, description: describeInvoice(invoice, invoicePayments) };
-  });
 }
 
 /** Money arrives as "150.00" from the form and is stored as exact cents. */
@@ -90,7 +68,15 @@ const invoiceFields = [
     return true;
   }),
   body('status').optional().isIn(INVOICE_STATUSES).withMessage('Choose a valid invoice status.'),
-  body('contractId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt(),
+  body('contractId').optional({ values: 'falsy' }).isInt({ min: 1 }).toInt()
+    .custom(async (contractId, { req }) => {
+      const { rowCount } = await pool.query(
+        'SELECT 1 FROM venue_contracts WHERE id = $1 AND venue_id = $2',
+        [contractId, Number(req.params.venueId)]
+      );
+      if (!rowCount) throw new Error('Choose one of this venue’s contracts.');
+      return true;
+    }),
   body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 3000 })
     .withMessage('Notes are too long.'),
 ];

@@ -20,6 +20,11 @@ async function readJsonResponse(response) {
     try { payload = await response.json(); } catch { payload = null; }
   }
   if (!response.ok) {
+    // A session that ended on the server (expired, deactivated or reset)
+    // returns the operator to sign-in instead of leaving every page erroring.
+    if (response.status === 401 && !response.url.includes('/auth/login')) {
+      window.dispatchEvent(new Event('console:signed-out'));
+    }
     throw new ApiError(payload?.error || 'The console could not complete that request.', {
       status: response.status,
       fields: payload?.fields,

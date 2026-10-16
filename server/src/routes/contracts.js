@@ -93,7 +93,6 @@ router.get(
   [param('venueId').isInt({ min: 1 }).toInt()],
   validateRequest,
   async (req, res, next) => {
-    let client = null;
     try {
       const venue = await findVenue(req.params.venueId);
       if (!venue) return res.status(404).json({ error: 'Venue not found.' });
@@ -118,6 +117,7 @@ router.post(
   ],
   validateRequest,
   async (req, res, next) => {
+    let client = null;
     try {
       const venue = await findVenue(req.params.venueId);
       if (!venue) return res.status(404).json({ error: 'Venue not found.' });

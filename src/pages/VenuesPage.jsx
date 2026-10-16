@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import Icon from '../components/Icon.jsx';
 import VenueTable from '../components/VenueTable.jsx';
+import { needsAttention } from '../attention.js';
 
 export default function VenuesPage() {
   const [venues, setVenues] = useState([]);
@@ -19,7 +20,7 @@ export default function VenuesPage() {
     const matchesQuery = `${venue.name} ${venue.slug} ${venue.apiUrl}`.toLowerCase().includes(query.toLowerCase());
     const state = venue.live?.state;
     const matchesFilter = filter === 'all'
-      || (filter === 'attention' && (['degraded', 'down', 'unreachable'].includes(state) || ['missing', 'expiring', 'expired'].includes(venue.contractSummary?.state)))
+      || (filter === 'attention' && needsAttention(venue))
       || filter === state
       || filter === venue.registryStatus;
     return matchesQuery && matchesFilter;

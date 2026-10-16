@@ -22,6 +22,10 @@ test(
     );
     await migrate();
     await migrate();
+    // requireAuth checks a real, active operator behind every session.
+    await pool.query(
+      "INSERT INTO console_users(id,email,name,password_hash,totp_secret) VALUES(1,'ops@test','Test operator','x','x')",
+    );
     const originalFetch = global.fetch;
     const uid = (n) => `12345678-1234-1234-1234-${String(n).padStart(12, '0')}`;
     const sha = 'b'.repeat(40),
@@ -145,7 +149,7 @@ test(
     app.use((req, res, next) => {
       if (req.get('X-Test-Identity'))
         req.session = {
-          user: { name: 'Test operator' },
+          user: { id: 1, name: 'Test operator' },
           csrfToken: 'test-csrf',
         };
       next();
@@ -222,10 +226,11 @@ test(
     assert.equal(
       (
         await pool.query(
-          'SELECT COUNT(*)::int AS n FROM console_railway_setup_access',
+          "SELECT to_regclass('public.console_railway_setup_access') AS found",
         )
-      ).rows[0].n,
-      0,
+      ).rows[0].found,
+      null,
+      'Workspace setup tokens have no table to be stored in.',
     );
     denySetup = false;
     assert.equal(
@@ -243,12 +248,15 @@ test(
     assert.equal(saved.environment_id, uid(2));
     assert.deepEqual(saved.services, { backend: uid(3), admin: uid(4) });
     assert.equal(decryptSecret(saved.railway_token), railwayToken);
-    const setup = (
-      await pool.query('SELECT * FROM console_railway_setup_access')
-    ).rows[0];
-    assert.equal(setup.scope, `workspace:${uid(9)}`);
-    assert.notEqual(setup.setup_token, setupToken);
-    assert.equal(decryptSecret(setup.setup_token), setupToken);
+    // The workspace token can manage every project, so it is used and dropped.
+    for (const table of ['venue_deployment_targets', 'venues', 'console_audit']) {
+      const rows = (await pool.query(`SELECT * FROM ${table}`)).rows;
+      for (const row of rows)
+        for (const value of Object.values(row))
+          if (typeof value === 'string' && value.startsWith('v1:'))
+            assert.notEqual(decryptSecret(value), setupToken, table);
+      assert.equal(JSON.stringify(rows).includes(setupToken), false, table);
+    }
     const venue = (
       await pool.query('SELECT * FROM venues WHERE id=$1', [ids[0]])
     ).rows[0];
@@ -257,7 +265,7 @@ test(
     assert.equal(venue.staff_url, null);
     const rediscovered = await request(`/targets/${ids[0]}/discover`, {});
     assert.equal(rediscovered.status, 200);
-    assert.equal(rediscovered.body.discovered.setupConnected, true);
+    assert.equal(rediscovered.body.discovered.setupConnected, undefined);
     providerProject = uid(10);
     providerWorkspace = uid(11);
     const otherWorkspace = await request(`/targets/${ids[1]}/connect`, {
@@ -330,16 +338,26 @@ test(
     );
     assert.equal(mutations, 2);
     await pool.query("UPDATE venue_release_rollouts SET status='cancelled'");
+    const withoutSetup = await request(`/targets/${ids[0]}/connect`, {
+      ...target,
+      railwayToken: '',
+      setupToken: '',
+    });
+    assert.equal(withoutSetup.status, 400);
+    assert.equal(
+      withoutSetup.body.code,
+      'RAILWAY_SETUP_REQUIRED',
+      'Every connection asks for the workspace token again.',
+    );
     assert.equal(
       (
         await request(`/targets/${ids[0]}/connect`, {
           ...target,
           railwayToken: '',
-          setupToken: '',
         })
       ).status,
       200,
-      'Saved project and workspace tokens can be reused.',
+      'The saved project token is reused.',
     );
     assert.equal(mutations, 4);
   },

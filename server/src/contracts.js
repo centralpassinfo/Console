@@ -1,5 +1,7 @@
 'use strict';
 
+const { localDate } = require('./timezone');
+
 const CONTRACT_STATUSES = ['draft', 'sent', 'signed', 'expired', 'terminated'];
 const EXPIRY_WARNING_DAYS = 60;
 
@@ -14,7 +16,9 @@ function parseMoneyToCents(value, label = 'Amount') {
 
 function dateOnly(value) {
   if (!value) return null;
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  // DATE columns arrive as text (see db.js). A Date here is an instant, such as
+  // "today", so it is read as the venue-side calendar day.
+  if (value instanceof Date) return localDate(value);
   return String(value).slice(0, 10);
 }
 

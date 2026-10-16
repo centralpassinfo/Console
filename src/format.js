@@ -1,3 +1,5 @@
+import { CONSOLE_TIMEZONE } from './timezone.mjs';
+
 export function formatNumber(value) {
   return new Intl.NumberFormat('en-AU').format(Number(value || 0));
 }
@@ -7,7 +9,7 @@ export function formatDateTime(value) {
   return new Intl.DateTimeFormat('en-AU', {
     dateStyle: 'medium',
     timeStyle: 'short',
-    timeZone: 'Australia/Adelaide',
+    timeZone: CONSOLE_TIMEZONE,
   }).format(new Date(value));
 }
 

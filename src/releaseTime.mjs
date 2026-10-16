@@ -1,4 +1,6 @@
-export const RELEASE_TIMEZONE = 'Australia/Sydney';
+import { CONSOLE_TIMEZONE } from './timezone.mjs';
+
+export const RELEASE_TIMEZONE = CONSOLE_TIMEZONE;
 export function formatReleaseTime(value) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('en-AU', {
@@ -16,7 +18,7 @@ export function formatReleaseTime(value) {
 export function releaseScheduleUtc(value) {
   if (!value) return null;
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
-    throw new Error('Enter a valid Sydney date and time.');
+    throw new Error('Enter a valid Adelaide date and time.');
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: RELEASE_TIMEZONE,
     year: 'numeric',
@@ -38,7 +40,7 @@ export function releaseScheduleUtc(value) {
   }
   if (matches.length !== 1)
     throw new Error(
-      'That Sydney time is skipped or repeated during a daylight-saving change. Choose another time.',
+      'That Adelaide time is skipped or repeated during a daylight-saving change. Choose another time.',
     );
   return matches[0];
 }

@@ -270,7 +270,13 @@ async function waitForDeployment(
         "Could not verify the Railway deployment. Inspect Railway before retrying.",
       );
     const status = payload.data.deployment.status;
-    if (status === "SUCCESS") return;
+    // SLEEPING is a healthy deployment of a service with app sleeping on; the
+    // version checks that follow wake it.
+    if (status === "SUCCESS" || status === "SLEEPING") return;
+    if (status === "NEEDS_APPROVAL")
+      throw new Error(
+        `Railway is holding deployment ${id} for approval in Railway. Approve or remove it there, then resolve this update.`,
+      );
     if (["FAILED", "CRASHED", "REMOVED", "SKIPPED"].includes(status))
       throw new Error(
         `Railway deployment ${id} ended with ${status}. Inspect Railway before retrying.`,

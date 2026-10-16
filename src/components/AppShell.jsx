@@ -9,6 +9,7 @@ const nav = [
   { to: '/venues', label: 'Venues', icon: 'venues' },
   { to: '/releases', label: 'Releases', icon: 'refresh' },
   { to: '/activity', label: 'Activity', icon: 'activity' },
+  { to: '/operators', label: 'Operators', icon: 'users' },
 ];
 
 export default function AppShell() {

@@ -11,6 +11,7 @@ const {
 } = require('../release-source');
 const { recordAudit } = require('../audit');
 const {
+  latestTestedRelease,
   queueAutomaticForVenue,
   queueAutomaticReleases,
 } = require('../automatic-releases');
@@ -64,10 +65,13 @@ router.get('/', async (req, res, next) => {
         t.project_id,t.environment_id,t.services,t.employee_url,t.auto_deploy_disabled,
         t.venue_id IS NOT NULL AS configured,
         (SELECT r.version FROM venue_release_rollouts x JOIN console_releases r ON r.id=x.release_id
-          WHERE x.venue_id=v.id AND x.status='succeeded' ORDER BY x.finished_at DESC LIMIT 1) AS last_verified_version
+          WHERE x.venue_id=v.id AND x.status='succeeded' ORDER BY x.finished_at DESC LIMIT 1) AS last_verified_version,
+        (SELECT json_build_object('version',r.version,'commit_sha',r.commit_sha,'source_run_number',r.source_run_number,'finished_at',x.finished_at)
+          FROM venue_release_rollouts x JOIN console_releases r ON r.id=x.release_id
+          WHERE x.venue_id=v.id AND x.status='succeeded' ORDER BY x.finished_at DESC LIMIT 1) AS last_verified
         FROM venues v LEFT JOIN venue_deployment_targets t ON t.venue_id=v.id ORDER BY v.name`),
       pool.query(`SELECT x.id,x.venue_id,x.release_id,x.status,x.approval_mode,x.approved_by,x.approved_at,x.scheduled_at,
-        x.started_at,x.finished_at,x.heartbeat_at,x.progress,x.error,v.name AS venue_name,r.version
+        x.started_at,x.finished_at,x.heartbeat_at,x.progress,x.error,v.name AS venue_name,r.version,r.commit_sha,r.source_run_number
         FROM venue_release_rollouts x JOIN venues v ON v.id=x.venue_id JOIN console_releases r ON r.id=x.release_id
         WHERE x.status IN ('queued','deploying','verifying','interrupted') OR x.id IN
           (SELECT id FROM venue_release_rollouts ORDER BY id DESC LIMIT 200) ORDER BY x.id DESC`),
@@ -122,11 +126,6 @@ async function discoveryToken(venueId, body, db = pool) {
     (existing ? decryptSecret(existing.railway_token) : null);
   return { venue, token, existing };
 }
-function setupScope(discovered) {
-  return discovered.workspaceId
-    ? `workspace:${discovered.workspaceId}`
-    : `project:${discovered.projectId}`;
-}
 router.post(
   '/targets/:venueId/discover',
   requireCsrf,
@@ -139,13 +138,6 @@ router.post(
         req.body,
       );
       const discovered = await discoverRailway(token, venue);
-      const {
-        rows: [setup],
-      } = await pool.query(
-        'SELECT scope FROM console_railway_setup_access WHERE scope=$1',
-        [setupScope(discovered)],
-      );
-      discovered.setupConnected = Boolean(setup);
       await recordAudit({
         venueId: venue.id,
         actor: actorFrom(req),
@@ -268,20 +260,13 @@ router.post(
       }
       // A failure rolls back the saved connection; repeat safely if Railway only
       // applied some of the settings. Every external mutation stays scoped here.
-      const scope = setupScope(discovered);
-      const {
-        rows: [savedSetup],
-      } = await db.query(
-        'SELECT setup_token FROM console_railway_setup_access WHERE scope=$1',
-        [scope],
-      );
-      const setupToken =
-        req.body.setupToken ||
-        (savedSetup ? decryptSecret(savedSetup.setup_token) : null);
+      // The workspace token can manage every project in the workspace, so it
+      // is used for this request only and never stored.
+      const setupToken = req.body.setupToken || null;
       if (!setupToken)
         throw Object.assign(
           new Error(
-            'Automatic Railway setup needs a workspace token to change service settings. Add setup access below; this venue’s project token is still used for deployment.',
+            'Paste a Railway workspace token so Console can change service settings. It is used for this connection only and not stored; this venue’s project token is still used for deployment.',
           ),
           { status: 400, code: 'RAILWAY_SETUP_REQUIRED' },
         );
@@ -297,11 +282,6 @@ router.post(
         );
       settingsStarted = true;
       await configureRailway(setupToken, discovered, services);
-      if (req.body.setupToken)
-        await db.query(
-          'INSERT INTO console_railway_setup_access(scope,setup_token) VALUES($1,$2) ON CONFLICT(scope) DO UPDATE SET setup_token=$2,updated_at=NOW()',
-          [scope, encryptSecret(setupToken)],
-        );
       await db.query(
         `INSERT INTO venue_deployment_targets(venue_id,project_id,environment_id,services,railway_token,auto_deploy_disabled,employee_url)
       VALUES($1,$2,$3,$4,$5,true,$6) ON CONFLICT(venue_id) DO UPDATE SET project_id=$2,environment_id=$3,services=$4,railway_token=$5,
@@ -329,7 +309,6 @@ router.post(
             environmentId: target.environmentId,
             services: target.services,
             railwaySettingsVerified: true,
-            setupScope: scope,
           },
         },
         db,
@@ -522,11 +501,7 @@ router.put('/venues/:id/automatic', requireCsrf, async (req, res, next) => {
     venue.automatic_updates = req.body.enabled;
     let queued = null;
     if (req.body.enabled) {
-      const {
-        rows: [latest],
-      } = await db.query(
-        'SELECT * FROM console_releases ORDER BY id DESC LIMIT 1',
-      );
+      const latest = await latestTestedRelease(db);
       queued = await queueAutomaticForVenue(db, venue, latest, {
         allowCancelled: !wasAutomatic,
       });

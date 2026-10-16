@@ -22,13 +22,18 @@ test(
     );
     await migrate();
     await migrate();
+    const {
+      rows: [operator],
+    } = await pool.query(
+      "INSERT INTO console_users(email,name,password_hash,totp_secret) VALUES('ops@test','Test operator','x','x') RETURNING id",
+    );
     const express = require('express'),
       app = express();
     app.use(express.json());
     app.use((req, res, next) => {
       if (req.get('X-Test-Identity'))
         req.session = {
-          user: { name: 'Test operator' },
+          user: { id: operator.id, name: 'Test operator' },
           csrfToken: 'test-csrf',
         };
       next();
@@ -98,11 +103,12 @@ test(
     );
     assert.equal((await setPolicy(ids[0], true, { csrf: false })).status, 403);
     assert.equal((await setPolicy(ids[2], true)).status, 400);
-    const rel = await request('/releases', {
-      version: '1',
-      commitSha: 'a'.repeat(40),
-      notes: 'First',
-    });
+    // Only releases CI vouched for are deployed without approval.
+    const rel = await request(
+      '/publish',
+      { version: '1', commitSha: 'a'.repeat(40), notes: 'First' },
+      { identity: false, publisher: true },
+    );
     assert.equal(rel.status, 201);
     const on = await setPolicy(ids[0], true);
     assert.equal(on.status, 200);
@@ -194,11 +200,11 @@ test(
       "UPDATE venue_release_rollouts SET status='interrupted' WHERE venue_id=$1 AND status='queued'",
       [ids[0]],
     );
-    const third = await request('/releases', {
-      version: '3',
-      commitSha: 'c'.repeat(40),
-      notes: 'Third',
-    });
+    const third = await request(
+      '/publish',
+      { version: '3', commitSha: 'd'.repeat(40), notes: 'Third' },
+      { identity: false, publisher: true },
+    );
     assert.equal(third.status, 201);
     assert.deepEqual(
       await queueAutomaticReleases(pool),
@@ -217,6 +223,22 @@ test(
       raced.flat().length,
       1,
       'Concurrent workers queue a venue only once.',
+    );
+    await pool.query(
+      "UPDATE venue_release_rollouts SET status='succeeded',finished_at=NOW() WHERE venue_id=$1 AND status='queued'",
+      [ids[0]],
+    );
+    const manual = await request('/releases', {
+      version: '4',
+      commitSha: 'e'.repeat(40),
+      notes: 'Registered by hand',
+    });
+    assert.equal(manual.status, 201);
+    assert.equal(manual.body.automaticallyQueued, 0);
+    assert.deepEqual(
+      await queueAutomaticReleases(pool),
+      [],
+      'A release registered by hand is never deployed without approval.',
     );
     await setPolicy(ids[0], false);
     assert.deepEqual(await queueAutomaticReleases(pool), []);

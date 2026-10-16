@@ -9,6 +9,7 @@ const { requireAuth, requireCsrf, actorFrom } = require('../auth');
 const { recordAudit, completeAudit } = require('../audit');
 const { summarizeContracts } = require('../contracts');
 const { listVenueContracts, contractSummaries } = require('../contract-store');
+const { billingSummaries } = require('../billing-store');
 const {
   VenueApiError,
   venueRequest,
@@ -70,10 +71,30 @@ router.get(
   async (req, res, next) => {
     try {
       const { rows } = await pool.query(`SELECT * FROM venues ORDER BY name ASC`);
-      const summaries = await contractSummaries(rows.map((venue) => venue.id));
+      const ids = rows.map((venue) => venue.id);
+      const [summaries, billing, { rows: rollouts }] = await Promise.all([
+        contractSummaries(ids),
+        billingSummaries(ids),
+        // The latest update per venue. An interrupted or failed one needs an
+        // operator, so it counts towards the fleet's "Needs attention".
+        pool.query(
+          `SELECT DISTINCT ON (x.venue_id) x.venue_id, x.status, x.error, x.finished_at, r.version
+             FROM venue_release_rollouts x JOIN console_releases r ON r.id = x.release_id
+            WHERE x.status <> 'cancelled'
+            ORDER BY x.venue_id, x.id DESC`
+        ),
+      ]);
+      const latestRollout = new Map(rollouts.map((row) => [row.venue_id, {
+        status: row.status, version: row.version, error: row.error, finishedAt: row.finished_at,
+      }]));
       const shouldFetchLive = req.query.live !== 'false';
       const venues = await Promise.all(rows.map(async (venue) => {
-        const safe = { ...publicVenue(venue), contractSummary: summaries.get(venue.id) || summarizeContracts([]) };
+        const safe = {
+          ...publicVenue(venue),
+          contractSummary: summaries.get(venue.id) || summarizeContracts([]),
+          billingSummary: billing.get(venue.id),
+          latestRollout: latestRollout.get(venue.id) || null,
+        };
         if (!shouldFetchLive) return safe;
         try {
           const live = await snapshotVenue(venue, decryptSecret(venue.platform_api_key));
@@ -163,6 +184,11 @@ router.put(
       const existing = await findVenue(req.params.id);
       if (!existing) return res.status(404).json({ error: 'Venue not found.' });
       const replacingKey = Boolean(req.body.platformApiKey);
+      // A field left out of the request keeps its saved value; an empty one
+      // clears it. Leaving out the status must never reactivate a venue.
+      const url = (field, column) => (req.body[field] === undefined
+        ? existing[column]
+        : req.body[field] ? baseUrl(req.body[field]) : null);
       const { rows: [venue] } = await pool.query(
         `UPDATE venues SET
           name = $2, slug = $3, api_url = $4, site_url = $5, admin_url = $6,
@@ -177,11 +203,11 @@ router.put(
           req.body.name,
           req.body.slug,
           baseUrl(req.body.apiUrl),
-          req.body.siteUrl ? baseUrl(req.body.siteUrl) : null,
-          req.body.adminUrl ? baseUrl(req.body.adminUrl) : null,
-          req.body.staffUrl ? baseUrl(req.body.staffUrl) : null,
-          req.body.registryStatus || 'active',
-          req.body.billingNotes || null,
+          url('siteUrl', 'site_url'),
+          url('adminUrl', 'admin_url'),
+          url('staffUrl', 'staff_url'),
+          req.body.registryStatus || existing.status,
+          req.body.billingNotes === undefined ? existing.billing_notes : req.body.billingNotes || null,
           replacingKey ? encryptSecret(req.body.platformApiKey) : null,
         ]
       );

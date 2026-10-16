@@ -82,8 +82,18 @@ async function processJob(job) {
         );
     };
     await assertRunning();
-    const target = job.target_snapshot,
-      venue = job.venue_snapshot;
+    // The Railway target is pinned at approval (changing it is refused while an
+    // update is queued). The platform key and addresses are read now: a key
+    // rotated or a domain changed after a scheduled approval must not make the
+    // deployment fail its verification and strand the venue as interrupted.
+    const target = job.target_snapshot;
+    const {
+      rows: [current],
+    } = await pool.query(
+      'SELECT api_url, admin_url, staff_url, platform_api_key FROM venues WHERE id=$1',
+      [job.venue_id],
+    );
+    const venue = { ...job.venue_snapshot, ...(current || {}) };
     const source = await sourceConfig();
     await deployRelease({
       release,

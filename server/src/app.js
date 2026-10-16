@@ -63,7 +63,9 @@ app.use('/api/console/auth', require('./routes/auth'));
 app.use('/api/console/venues', require('./routes/venues'));
 app.use('/api/console/venues', require('./routes/contracts'));
 app.use('/api/console/venues', require('./routes/billing'));
+app.use('/api/console/venues', require('./routes/tablet'));
 app.use('/api/console/audit', require('./routes/audit'));
+app.use('/api/console/operators', require('./routes/operators'));
 app.use('/api/console/releases', require('./routes/releases'));
 app.use('/api/console/release-publisher', require('./routes/release-publisher').router);
 
