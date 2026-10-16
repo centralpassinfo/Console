@@ -9,6 +9,17 @@ import {
 } from '../releaseTime.mjs';
 import '../releases.css';
 import useDialogFocus from '../useDialogFocus.js';
+import {
+  ReleaseSourceCard,
+  RailwaySetupDialog,
+} from '../components/ReleaseConnections.jsx';
+function releaseLabel(release) {
+  return release.source_run_number
+    ? `Build ${release.source_run_number}`
+    : release.version?.startsWith('commit-')
+      ? `Update ${release.commit_sha.slice(0, 8)}`
+      : release.version;
+}
 const active = ['queued', 'deploying', 'verifying', 'interrupted'];
 const emptyRelease = {
   version: '',
@@ -54,7 +65,7 @@ export default function ReleasesPage() {
     [target, setTarget] = useState(null);
   const formDialogRef = useRef(null);
   useDialogFocus(formDialogRef, {
-    open: Boolean(newRelease || target),
+    open: Boolean(newRelease || target?.manual),
     busy,
     onClose: () => {
       setNewRelease(null);
@@ -235,16 +246,19 @@ export default function ReleasesPage() {
             <Icon name="refresh" size={17} />
             Refresh
           </button>
-          <button
-            className="button button--primary"
-            onClick={() => {
-              setFormError('');
-              setNewRelease({ ...emptyRelease });
-            }}
-          >
-            <Icon name="plus" size={17} />
-            New release
-          </button>
+          <details className="release-advanced-menu">
+            <summary>Advanced</summary>
+            <button
+              className="button button--primary"
+              onClick={() => {
+                setFormError('');
+                setNewRelease({ ...emptyRelease });
+              }}
+            >
+              <Icon name="plus" size={17} />
+              Register release manually
+            </button>
+          </details>
         </div>
       </header>
       {error && (
@@ -271,6 +285,13 @@ export default function ReleasesPage() {
         <div className="loading-block">Loading release history…</div>
       ) : (
         <>
+          <ReleaseSourceCard
+            source={data.source}
+            onChange={async (message) => {
+              setNotice(message);
+              await load();
+            }}
+          />
           <section className="content-card">
             <div className="content-card__header">
               <div>
@@ -289,7 +310,7 @@ export default function ReleasesPage() {
                   <option value="">Select a release</option>
                   {releases.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.version} · {r.commit_sha.slice(0, 8)}
+                      {releaseLabel(r)} · {r.notes.split('\n')[0].slice(0, 85)}
                     </option>
                   ))}
                 </select>
@@ -307,15 +328,26 @@ export default function ReleasesPage() {
             </div>
             {!releases.length && (
               <p className="release-help">
-                Create the first release to begin. No venue changes until you
-                approve an update.
+                Push Platform changes to main and wait for CI to pass. Console
+                discovers the release automatically—there is no version or
+                commit SHA to enter.
               </p>
             )}
             {release && (
               <div className="release-notes">
-                <strong>{release.version}</strong>
+                <strong>{releaseLabel(release)}</strong>
                 <code>{release.commit_sha}</code>
                 <p>{release.notes}</p>
+                {release.source_run_url && (
+                  <a
+                    className="release-build-link"
+                    href={release.source_run_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View successful build on GitHub
+                  </a>
+                )}
                 {release.tablet_bundle && (
                   <small>
                     Includes tablet bundle {release.tablet_bundle.version} (
@@ -582,7 +614,8 @@ export default function ReleasesPage() {
             <h2>New release</h2>
             <p>
               Use a tested commit from the configured Platform repository.
-              Creating a release does not deploy it.
+              Automatic-update venues will queue this release. Other venues
+              require approval.
             </p>
             <div className="release-fields">
               <label>
@@ -682,7 +715,21 @@ export default function ReleasesPage() {
           </form>
         </section>
       )}
-      {target && (
+      {target && !target.manual && (
+        <RailwaySetupDialog
+          target={target}
+          onClose={() => setTarget(null)}
+          onAdvanced={() => setTarget({ ...target, manual: true })}
+          onSaved={async () => {
+            setTarget(null);
+            setNotice(
+              'Railway connected. Service folders and deployment controls were verified.',
+            );
+            await load();
+          }}
+        />
+      )}
+      {target?.manual && (
         <section
           ref={formDialogRef}
           tabIndex={-1}

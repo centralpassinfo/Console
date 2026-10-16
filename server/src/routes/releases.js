@@ -2,7 +2,13 @@
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth, requireCsrf, actorFrom } = require('../auth');
-const { encryptSecret } = require('../crypto');
+const { encryptSecret, decryptSecret } = require('../crypto');
+const { discoverRailway, configureRailway } = require('../railway-discovery');
+const {
+  publicSource,
+  connectSource,
+  syncSource,
+} = require('../release-source');
 const { recordAudit } = require('../audit');
 const {
   queueAutomaticForVenue,
@@ -68,11 +74,244 @@ router.get('/', async (req, res, next) => {
       venues,
       rollouts,
       worker: { lastSeen: worker?.last_seen || null },
+      source: await publicSource(),
     });
   } catch (e) {
     next(e);
   }
 });
+router.post('/source', requireCsrf, async (req, res, next) => {
+  try {
+    await connectSource(req.body.githubToken, actorFrom(req));
+    const result = await syncSource();
+    await queueAutomaticReleases(pool);
+    res.json({ ...result, source: await publicSource() });
+  } catch (error) {
+    handle(error, res, next);
+  }
+});
+router.post('/sync', requireCsrf, async (req, res, next) => {
+  try {
+    const result = await syncSource();
+    await queueAutomaticReleases(pool);
+    res.json({ ...result, source: await publicSource() });
+  } catch (error) {
+    handle(error, res, next);
+  }
+});
+async function discoveryToken(venueId, body, db = pool) {
+  const {
+    rows: [venue],
+  } = await db.query('SELECT * FROM venues WHERE id=$1', [venueId]);
+  if (!venue)
+    throw Object.assign(new Error('Venue not found.'), { status: 404 });
+  const {
+    rows: [existing],
+  } = await db.query(
+    'SELECT * FROM venue_deployment_targets WHERE venue_id=$1',
+    [venueId],
+  );
+  const token =
+    body.railwayToken ||
+    (existing ? decryptSecret(existing.railway_token) : null);
+  return { venue, token, existing };
+}
+router.post(
+  '/targets/:venueId/discover',
+  requireCsrf,
+  async (req, res, next) => {
+    try {
+      if (!/^\d+$/.test(req.params.venueId))
+        return res.status(400).json({ error: 'Invalid venue.' });
+      const { venue, token } = await discoveryToken(
+        req.params.venueId,
+        req.body,
+      );
+      const discovered = await discoverRailway(token, venue);
+      await recordAudit({
+        venueId: venue.id,
+        actor: actorFrom(req),
+        action: 'release.target.discovered',
+        detail: {
+          projectId: discovered.projectId,
+          environmentId: discovered.environmentId,
+        },
+      });
+      res.json({ discovered });
+    } catch (error) {
+      handle(error, res, next);
+    }
+  },
+);
+router.post(
+  '/targets/:venueId/connect',
+  requireCsrf,
+  async (req, res, next) => {
+    let db,
+      settingsStarted = false;
+    try {
+      if (!/^\d+$/.test(req.params.venueId) || req.body.manageUpdates !== true)
+        return res
+          .status(400)
+          .json({
+            error:
+              'Confirm that Console should manage these production services.',
+          });
+      db = await pool.connect();
+      await db.query('BEGIN');
+      await db.query('SELECT id FROM venues WHERE id=$1 FOR UPDATE', [
+        req.params.venueId,
+      ]);
+      const { venue, token, existing } = await discoveryToken(
+        req.params.venueId,
+        req.body,
+        db,
+      );
+      const {
+        rows: [busy],
+      } = await db.query(
+        "SELECT id FROM venue_release_rollouts WHERE venue_id=$1 AND status IN ('queued','deploying','verifying','interrupted')",
+        [venue.id],
+      );
+      if (busy)
+        throw Object.assign(
+          new Error(
+            'Wait for or cancel the current update before reconnecting this venue.',
+          ),
+          { status: 409 },
+        );
+      const discovered = await discoverRailway(token, venue);
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `railway-target:${discovered.projectId}:${discovered.environmentId}`,
+      ]);
+      const {
+        rows: [assigned],
+      } = await db.query(
+        'SELECT venue_id FROM venue_deployment_targets WHERE project_id=$1 AND environment_id=$2 AND venue_id<>$3',
+        [discovered.projectId, discovered.environmentId, venue.id],
+      );
+      if (assigned)
+        throw Object.assign(
+          new Error(
+            'That Railway project and environment are already assigned to another venue.',
+          ),
+          { status: 409 },
+        );
+      // Rediscover on save: never trust browser-supplied project/environment IDs.
+      const services = Object.fromEntries(
+        Object.entries(req.body.services || {}).filter(([, id]) => Boolean(id)),
+      );
+      const target = cleanTarget({
+        projectId: discovered.projectId,
+        environmentId: discovered.environmentId,
+        services,
+        autoDeployDisabled: true,
+      });
+      for (const id of Object.values(services))
+        if (!discovered.services.some((service) => service.id === id))
+          throw Object.assign(
+            new Error(
+              'A selected service is no longer available in this environment.',
+            ),
+            { status: 400 },
+          );
+      const urlFor = (role) =>
+        discovered.services.find((service) => service.id === services[role])
+          ?.urls[0] || null;
+      const urls = {
+        api_url: venue.api_url || urlFor('backend'),
+        admin_url: venue.admin_url || urlFor('admin'),
+        staff_url: venue.staff_url || urlFor('staff'),
+      };
+      const employeeUrl = services.employee
+        ? req.body.employeeUrl || existing?.employee_url || urlFor('employee')
+        : null;
+      if (
+        !urls.api_url ||
+        !urls.admin_url ||
+        !urls.staff_url ||
+        (services.employee && !employeeUrl)
+      )
+        throw Object.assign(
+          new Error(
+            'Add a public domain to each selected portal in Railway so Console can verify deployments.',
+          ),
+          { status: 400 },
+        );
+      if (employeeUrl) {
+        try {
+          const url = new URL(employeeUrl);
+          if (url.protocol !== 'https:' || url.username || url.password)
+            throw new Error();
+        } catch {
+          throw Object.assign(
+            new Error('Enter a valid HTTPS employee portal URL.'),
+            { status: 400 },
+          );
+        }
+      }
+      // A failure rolls back the saved connection; repeat safely if Railway only
+      // applied some of the settings. Every external mutation stays scoped here.
+      settingsStarted = true;
+      await configureRailway(token, discovered, services);
+      await db.query(
+        `INSERT INTO venue_deployment_targets(venue_id,project_id,environment_id,services,railway_token,auto_deploy_disabled,employee_url)
+      VALUES($1,$2,$3,$4,$5,true,$6) ON CONFLICT(venue_id) DO UPDATE SET project_id=$2,environment_id=$3,services=$4,railway_token=$5,
+      auto_deploy_disabled=true,employee_url=$6,updated_at=NOW()`,
+        [
+          venue.id,
+          target.projectId,
+          target.environmentId,
+          target.services,
+          encryptSecret(token),
+          employeeUrl,
+        ],
+      );
+      await db.query(
+        'UPDATE venues SET api_url=$2,admin_url=$3,staff_url=$4,updated_at=NOW() WHERE id=$1',
+        [venue.id, urls.api_url, urls.admin_url, urls.staff_url],
+      );
+      await recordAudit(
+        {
+          venueId: venue.id,
+          actor: actorFrom(req),
+          action: 'release.target.connected',
+          detail: {
+            projectId: target.projectId,
+            environmentId: target.environmentId,
+            services: target.services,
+            railwaySettingsVerified: true,
+          },
+        },
+        db,
+      );
+      await db.query('COMMIT');
+      res.json({
+        ok: true,
+        projectName: discovered.projectName,
+        environmentName: discovered.environmentName,
+      });
+    } catch (error) {
+      if (db) await db.query('ROLLBACK');
+      if (settingsStarted) {
+        await recordAudit({
+          venueId: Number(req.params.venueId),
+          actor: actorFrom(req),
+          action: 'release.target.connection_failed',
+          detail: {
+            reason:
+              'Railway settings may have been partially applied. Reconnect to verify them.',
+          },
+        }).catch(() => {});
+        error.message +=
+          ' Some Railway settings may already be applied; reconnect to verify and finish setup.';
+      }
+      handle(error, res, next);
+    } finally {
+      db?.release();
+    }
+  },
+);
 router.post('/', requireCsrf, async (req, res, next) => {
   let db;
   try {

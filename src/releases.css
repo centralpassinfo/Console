@@ -12,6 +12,123 @@
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.release-advanced-menu {
+  font-size: 0.8rem;
+  position: relative;
+  align-self: center;
+}
+.release-advanced-menu summary {
+  cursor: pointer;
+  padding: 10px;
+}
+.release-advanced-menu[open] button {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  z-index: 5;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+.release-flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  list-style-position: inside;
+  padding: 24px;
+  margin: 0;
+}
+.release-flow li {
+  font-size: 0.8rem;
+  color: var(--accent);
+  line-height: 1.6;
+}
+.release-flow li span {
+  display: block;
+  color: var(--text-soft);
+  font-size: 0.75rem;
+  margin-top: 7px;
+}
+.release-source-status {
+  margin: 0 24px 20px;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+.release-source-status small {
+  display: block;
+  margin-top: 5px;
+}
+.release-connection-form {
+  margin: 0 24px 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+}
+.release-connection-form p {
+  font-size: 0.75rem;
+  line-height: 1.7;
+  color: var(--text-soft);
+}
+.release-connection-form .button {
+  justify-self: start;
+}
+.release-advanced {
+  margin: 0 24px 24px;
+  font-size: 0.8rem;
+}
+.release-advanced summary {
+  cursor: pointer;
+}
+.release-advanced .release-connection-form {
+  margin: 15px 0 0;
+}
+.release-discovery-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--accent-wash);
+  font-size: 0.85rem;
+}
+.release-setup-note {
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  background: var(--accent-wash);
+}
+.release-advanced-button {
+  align-self: flex-start;
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.release-build-link {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: var(--accent);
+  text-decoration: underline;
+}
+@media (max-width: 1000px) {
+  .release-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .release-flow {
+    grid-template-columns: 1fr;
+  }
+  .release-source-card .content-card__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+}
 .release-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

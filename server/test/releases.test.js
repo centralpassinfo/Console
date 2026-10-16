@@ -177,15 +177,23 @@ test('deployment uploads the pinned source and waits for each component before t
         },
         token: 'token',
         platformKey: 'key',
+        repository: 'https://github.com/CentralPass/centralpass-platform.git',
+        githubToken: 'shared-read-only-github-token',
         onProgress: async () => {},
         assertRunning: async () => {},
       },
       {
-        prepareSource: async () => ({ directory, source: directory }),
+        prepareSource: async (pinnedRelease, options) => {
+          assert.equal(pinnedRelease.commit_sha, sha);
+          assert.equal(options.repository, 'https://github.com/CentralPass/centralpass-platform.git');
+          assert.equal(options.githubToken, 'shared-read-only-github-token');
+          return { directory, source: directory };
+        },
         execCommand: async (file, args, opts) => {
           events.push(`upload:${args[args.indexOf('--service') + 1]}`);
           assert.ok(args.includes('--path-as-root'));
           assert.equal(opts.env.RAILWAY_TOKEN, 'token');
+          assert.equal(JSON.stringify(opts.env).includes('shared-read-only-github-token'), false);
           return { stdout: JSON.stringify({ deploymentId: uuid }) };
         },
         waitForDeployment: async () => {},

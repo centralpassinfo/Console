@@ -57,7 +57,11 @@ async function run(file, args, options = {}) {
 }
 async function prepareSource(
   release,
-  { repository = process.env.RELEASE_REPOSITORY_URL, execCommand = run } = {},
+  {
+    repository = process.env.RELEASE_REPOSITORY_URL,
+    githubToken = process.env.RELEASE_GITHUB_TOKEN,
+    execCommand = run,
+  } = {},
 ) {
   if (
     !/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/.test(
@@ -74,10 +78,10 @@ async function prepareSource(
     const git = path.join(directory, "repository");
     const gitEnv = cliEnvironment();
     gitEnv.GIT_TERMINAL_PROMPT = "0";
-    if (process.env.RELEASE_GITHUB_TOKEN) {
+    if (githubToken) {
       gitEnv.GIT_CONFIG_COUNT = "1";
       gitEnv.GIT_CONFIG_KEY_0 = "http.https://github.com/.extraheader";
-      gitEnv.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${Buffer.from(`x-access-token:${process.env.RELEASE_GITHUB_TOKEN}`).toString("base64")}`;
+      gitEnv.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${Buffer.from(`x-access-token:${githubToken}`).toString("base64")}`;
     }
     await execCommand("git", ["init", git], { env: gitEnv });
     await execCommand(
@@ -277,7 +281,17 @@ async function waitForDeployment(
   );
 }
 async function deployRelease(
-  { release, target, venue, token, platformKey, onProgress, assertRunning },
+  {
+    release,
+    target,
+    venue,
+    token,
+    platformKey,
+    repository,
+    githubToken,
+    onProgress,
+    assertRunning,
+  },
   deps = {},
 ) {
   const prepare = deps.prepareSource || prepareSource;
@@ -291,7 +305,7 @@ async function deployRelease(
     throw new Error(
       "Set RAILWAY_CLI_PATH to the Railway executable on Windows.",
     );
-  const prepared = await prepare(release);
+  const prepared = await prepare(release, { repository, githubToken });
   try {
     const urls = {
       backend: venue.api_url,

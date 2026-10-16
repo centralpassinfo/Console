@@ -5,6 +5,7 @@ const { decryptSecret, resolveKey } = require('../src/crypto');
 const { recordAudit } = require('../src/audit');
 const { deployRelease } = require('../src/release-deployer');
 const { queueAutomaticReleases } = require('../src/automatic-releases');
+const { sourceConfig, syncSource } = require('../src/release-source');
 const workerId = randomUUID();
 let stopping = false;
 process.on('SIGTERM', () => {
@@ -80,12 +81,15 @@ async function processJob(job) {
     await assertRunning();
     const target = job.target_snapshot,
       venue = job.venue_snapshot;
+    const source = await sourceConfig();
     await deployRelease({
       release,
       target,
       venue,
       token: decryptSecret(target.railway_token),
       platformKey: decryptSecret(venue.platform_api_key),
+      repository: source.repository,
+      githubToken: source.token,
       assertRunning,
       onProgress: async (component, state) => {
         await assertRunning();
@@ -146,8 +150,6 @@ async function processJob(job) {
 }
 async function main() {
   resolveKey();
-  if (!process.env.RELEASE_REPOSITORY_URL)
-    throw new Error('RELEASE_REPOSITORY_URL is required.');
   const beat = async () => {
     await pool.query(
       'INSERT INTO console_release_workers(id) VALUES ($1) ON CONFLICT(id) DO UPDATE SET heartbeat_at=NOW()',
@@ -162,8 +164,15 @@ async function main() {
   };
   await beat();
   const timer = setInterval(() => beat().catch(() => {}), 10000);
+  let nextSourceSync = 0;
   try {
     while (!stopping) {
+      if (Date.now() >= nextSourceSync) {
+        nextSourceSync = Date.now() + 60000;
+        // Discovery records failures for Console. A GitHub outage must not
+        // prevent already-published, approved deployments from proceeding.
+        await syncSource().catch(() => {});
+      }
       await queueAutomaticReleases(pool);
       const job = await claim();
       if (job) await processJob(job);
