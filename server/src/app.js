@@ -64,6 +64,8 @@ app.use('/api/console/venues', require('./routes/venues'));
 app.use('/api/console/venues', require('./routes/contracts'));
 app.use('/api/console/venues', require('./routes/billing'));
 app.use('/api/console/audit', require('./routes/audit'));
+app.use('/api/console/releases', require('./routes/releases'));
+app.use('/api/console/release-publisher', require('./routes/release-publisher').router);
 
 if (config.nodeEnv === 'production') {
   const dist = path.resolve(__dirname, '../../dist');

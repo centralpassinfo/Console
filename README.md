@@ -18,6 +18,10 @@ secrets, R2 credentials, SMS credentials, customer records, orders or menus.
 - One switch per feature, including ordering, with technical dependency handling.
 - Named confirmation before every entitlement change.
 - Local cross-venue audit plus the venue's own entitlement audit.
+- Versioned releases, per-venue or bulk approval, scheduling, deployment checks
+  and an automatic-update switch per venue, plus Console control of installed
+  tablet bundles. See [Release setup](docs/RELEASES.md)
+  for the separate worker and the required production auto-deploy cutover.
 - Per-venue contract records with encrypted PDF storage, commercial terms,
   renewal dates and missing/expiring agreement warnings.
 - Responsive desktop/mobile UI aligned to the CentralPass marketing brand.

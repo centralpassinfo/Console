@@ -58,6 +58,7 @@ export default function VenueDetailPage() {
       <header className="venue-header">
         <div className="venue-header__identity"><span className="venue-avatar">{venue.name.slice(0, 2).toUpperCase()}</span><div><span className="eyebrow">Venue control</span><h1>{venue.name}</h1><div className="venue-header__badges"><StatusBadge state={serviceState} /><span className={`registry-chip registry-chip--${venue.registryStatus}`}>{venue.registryStatus}</span></div></div></div>
         <div className="venue-header__actions">
+          <Link className="button button--secondary" to={`/releases?venue=${id}`}><Icon name="refresh" size={17} />Updates</Link>
           <button className="button button--secondary" type="button" onClick={load}><Icon name="refresh" size={17} />Refresh</button>
           <Link className="button button--secondary" to={`/venues/${id}/edit`}><Icon name="edit" size={17} />Edit venue</Link>
         </div>

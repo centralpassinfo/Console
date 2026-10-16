@@ -1,0 +1,232 @@
+.releases-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.releases-page .page-header {
+  margin-bottom: 0;
+}
+.release-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.release-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding: 22px;
+}
+.releases-page label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+.releases-page input:not([type='checkbox']),
+.releases-page select,
+.releases-page textarea {
+  min-width: 0;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+}
+.releases-page small {
+  font-size: 0.73rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.release-notes {
+  margin: 0 22px 22px;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.release-notes code {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.release-notes p {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.release-help {
+  padding: 0 22px 22px;
+}
+.release-warning {
+  padding: 16px 20px;
+  border: 1px solid #e8d498;
+  background: var(--warning-wash);
+  border-radius: 12px;
+  color: var(--warning);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+.release-table-wrap {
+  overflow-x: auto;
+}
+.releases-page .search-box {
+  flex-direction: row;
+  align-items: center;
+}
+.releases-page .search-box input {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.release-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.81rem;
+  text-align: left;
+}
+.release-table th {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+.release-table td,
+.release-table th {
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.release-table td small {
+  display: block;
+  margin-top: 5px;
+}
+.release-table input[type='checkbox'],
+.release-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.release-approval-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  font-size: 0.81rem;
+  background: var(--accent-wash);
+  border-radius: 0 0 14px 14px;
+}
+.release-history {
+  padding: 0 22px;
+}
+.release-job {
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+}
+.release-job strong {
+  font-size: 0.85rem;
+}
+.release-job small {
+  display: block;
+  margin-top: 8px;
+}
+.release-job__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.release-state {
+  font-size: 0.72rem;
+  padding: 7px 10px;
+  background: var(--surface-2);
+  border-radius: 7px;
+  text-transform: capitalize;
+}
+.release-state--succeeded {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.release-state--failed,
+.release-state--interrupted {
+  background: var(--error-wash);
+  color: var(--error);
+}
+.release-state--queued,
+.release-state--deploying,
+.release-state--verifying {
+  background: var(--warning-wash);
+  color: var(--warning);
+}
+.release-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.71rem;
+  color: var(--text-soft);
+}
+.release-error {
+  color: var(--error);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+.release-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #23172799;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: auto;
+  padding: 40px 20px;
+}
+.release-form {
+  width: 100%;
+  max-width: 740px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.release-form > p {
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--text-soft);
+}
+.release-form .release-fields {
+  padding: 0;
+}
+.release-form .release-check {
+  flex-direction: row;
+  align-items: flex-start;
+  font-size: 0.79rem;
+  line-height: 1.7;
+}
+@media (max-width: 760px) {
+  .release-fields {
+    grid-template-columns: 1fr;
+  }
+  .release-job {
+    flex-direction: column;
+  }
+  .release-approval-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .release-overlay {
+    padding: 16px;
+  }
+  .release-form {
+    padding: 20px;
+  }
+}

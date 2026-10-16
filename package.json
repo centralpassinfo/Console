@@ -10,6 +10,7 @@
     "start": "node server/src/index.js",
     "db:migrate": "node server/scripts/migrate.js",
     "admin:create": "node server/scripts/create-admin.js",
+    "releases:worker": "node server/scripts/release-worker.js",
     "test": "node --test server/test/*.test.js",
     "check": "npm run test && npm run build"
   },

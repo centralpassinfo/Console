@@ -7,6 +7,7 @@ import { useAuth } from '../auth.jsx';
 const nav = [
   { to: '/', label: 'Overview', icon: 'dashboard', end: true },
   { to: '/venues', label: 'Venues', icon: 'venues' },
+  { to: '/releases', label: 'Releases', icon: 'refresh' },
   { to: '/activity', label: 'Activity', icon: 'activity' },
 ];
 
