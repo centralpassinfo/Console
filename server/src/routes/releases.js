@@ -34,7 +34,13 @@ function handle(error, res, next) {
     });
   }
   if (error.status)
-    return res.status(error.status).json({ error: error.message });
+    return res
+      .status(error.status)
+      .json({
+        error: error.message,
+        ...(error.operation ? { operation: error.operation } : {}),
+        ...(error.code ? { code: error.code } : {}),
+      });
   if (error.code === '23505')
     return res.status(409).json({
       error:
@@ -116,6 +122,11 @@ async function discoveryToken(venueId, body, db = pool) {
     (existing ? decryptSecret(existing.railway_token) : null);
   return { venue, token, existing };
 }
+function setupScope(discovered) {
+  return discovered.workspaceId
+    ? `workspace:${discovered.workspaceId}`
+    : `project:${discovered.projectId}`;
+}
 router.post(
   '/targets/:venueId/discover',
   requireCsrf,
@@ -128,6 +139,13 @@ router.post(
         req.body,
       );
       const discovered = await discoverRailway(token, venue);
+      const {
+        rows: [setup],
+      } = await pool.query(
+        'SELECT scope FROM console_railway_setup_access WHERE scope=$1',
+        [setupScope(discovered)],
+      );
+      discovered.setupConnected = Boolean(setup);
       await recordAudit({
         venueId: venue.id,
         actor: actorFrom(req),
@@ -151,12 +169,10 @@ router.post(
       settingsStarted = false;
     try {
       if (!/^\d+$/.test(req.params.venueId) || req.body.manageUpdates !== true)
-        return res
-          .status(400)
-          .json({
-            error:
-              'Confirm that Console should manage these production services.',
-          });
+        return res.status(400).json({
+          error:
+            'Confirm that Console should manage these production services.',
+        });
       db = await pool.connect();
       await db.query('BEGIN');
       await db.query('SELECT id FROM venues WHERE id=$1 FOR UPDATE', [
@@ -252,8 +268,40 @@ router.post(
       }
       // A failure rolls back the saved connection; repeat safely if Railway only
       // applied some of the settings. Every external mutation stays scoped here.
+      const scope = setupScope(discovered);
+      const {
+        rows: [savedSetup],
+      } = await db.query(
+        'SELECT setup_token FROM console_railway_setup_access WHERE scope=$1',
+        [scope],
+      );
+      const setupToken =
+        req.body.setupToken ||
+        (savedSetup ? decryptSecret(savedSetup.setup_token) : null);
+      if (!setupToken)
+        throw Object.assign(
+          new Error(
+            'Automatic Railway setup needs a workspace token to change service settings. Add setup access below; this venue’s project token is still used for deployment.',
+          ),
+          { status: 400, code: 'RAILWAY_SETUP_REQUIRED' },
+        );
+      if (
+        typeof setupToken !== 'string' ||
+        setupToken.length < 20 ||
+        setupToken.length > 512 ||
+        /\s/.test(setupToken)
+      )
+        throw Object.assign(
+          new Error('Enter a valid Railway workspace token for setup.'),
+          { status: 400 },
+        );
       settingsStarted = true;
-      await configureRailway(token, discovered, services);
+      await configureRailway(setupToken, discovered, services);
+      if (req.body.setupToken)
+        await db.query(
+          'INSERT INTO console_railway_setup_access(scope,setup_token) VALUES($1,$2) ON CONFLICT(scope) DO UPDATE SET setup_token=$2,updated_at=NOW()',
+          [scope, encryptSecret(setupToken)],
+        );
       await db.query(
         `INSERT INTO venue_deployment_targets(venue_id,project_id,environment_id,services,railway_token,auto_deploy_disabled,employee_url)
       VALUES($1,$2,$3,$4,$5,true,$6) ON CONFLICT(venue_id) DO UPDATE SET project_id=$2,environment_id=$3,services=$4,railway_token=$5,
@@ -281,6 +329,7 @@ router.post(
             environmentId: target.environmentId,
             services: target.services,
             railwaySettingsVerified: true,
+            setupScope: scope,
           },
         },
         db,
@@ -294,17 +343,24 @@ router.post(
     } catch (error) {
       if (db) await db.query('ROLLBACK');
       if (settingsStarted) {
+        console.warn('Railway connection settings failed', {
+          venueId: Number(req.params.venueId),
+          code: error.code || 'SETUP_FAILED',
+          operation: error.operation || 'VerifySettings',
+        });
         await recordAudit({
           venueId: Number(req.params.venueId),
           actor: actorFrom(req),
           action: 'release.target.connection_failed',
           detail: {
-            reason:
-              'Railway settings may have been partially applied. Reconnect to verify them.',
+            code: error.code || 'SETUP_FAILED',
+            operation: error.operation || 'VerifySettings',
+            settingsMayHaveChanged: error.operation !== 'SetupAccess',
           },
         }).catch(() => {});
-        error.message +=
-          ' Some Railway settings may already be applied; reconnect to verify and finish setup.';
+        if (error.operation !== 'SetupAccess')
+          error.message +=
+            ' Some Railway settings may already be applied; reconnect to verify and finish setup.';
       }
       handle(error, res, next);
     } finally {

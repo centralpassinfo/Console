@@ -26,9 +26,13 @@ test(
     const uid = (n) => `12345678-1234-1234-1234-${String(n).padStart(12, '0')}`;
     const sha = 'b'.repeat(40),
       githubToken = 'github-test-token-' + 'x'.repeat(32),
-      railwayToken = 'railway-test-token-' + 'x'.repeat(32);
+      railwayToken = 'railway-test-token-' + 'x'.repeat(32),
+      setupToken = 'setup-workspace-test-token-' + 'x'.repeat(32);
     let ci = 'success',
-      mutations = 0;
+      mutations = 0,
+      denySetup = false,
+      providerProject = uid(1),
+      providerWorkspace = uid(9);
     global.fetch = async (input, options) => {
       const endpoint = String(input);
       const ok = (data) => ({ ok: true, json: async () => data });
@@ -54,15 +58,34 @@ test(
         return ok({ sha, commit: { message: 'Tested platform fix' } });
       }
       if (endpoint === 'https://backboard.railway.com/graphql/v2') {
-        assert.equal(options.headers['Project-Access-Token'], railwayToken);
         const { query, variables } = JSON.parse(options.body);
+        if (query.includes('projectToken') || query.includes('Discovery'))
+          assert.equal(options.headers['Project-Access-Token'], railwayToken);
+        else {
+          assert.equal(options.headers.Authorization, `Bearer ${setupToken}`);
+          assert.equal(options.headers['Project-Access-Token'], undefined);
+        }
+        if (query.includes('SetupAccess'))
+          return denySetup
+            ? ok({
+                errors: [
+                  {
+                    message: 'Not authorized',
+                    extensions: { code: 'FORBIDDEN' },
+                  },
+                ],
+              })
+            : ok({ data: { project: { id: variables.projectId } } });
         if (query.includes('projectToken'))
           return ok({
             data: {
               projectToken: {
-                projectId: uid(1),
+                projectId: providerProject,
                 environmentId: uid(2),
-                project: { name: 'Venue project' },
+                project: {
+                  name: 'Venue project',
+                  workspaceId: providerWorkspace,
+                },
                 environment: { name: 'Production' },
               },
             },
@@ -168,6 +191,7 @@ test(
       );
     const target = {
       railwayToken,
+      setupToken,
       services: { backend: uid(3), admin: uid(4), staff: '' },
       manageUpdates: true,
       projectId: uid(999),
@@ -184,6 +208,26 @@ test(
     });
     assert.equal(forged.status, 400);
     assert.equal(mutations, 0);
+    const missingSetup = await request(`/targets/${ids[0]}/connect`, {
+      ...target,
+      setupToken: '',
+    });
+    assert.equal(missingSetup.status, 400);
+    assert.equal(missingSetup.body.code, 'RAILWAY_SETUP_REQUIRED');
+    denySetup = true;
+    const deniedSetup = await request(`/targets/${ids[0]}/connect`, target);
+    assert.equal(deniedSetup.status, 403);
+    assert.equal(deniedSetup.body.operation, 'SetupAccess');
+    assert.equal(mutations, 0);
+    assert.equal(
+      (
+        await pool.query(
+          'SELECT COUNT(*)::int AS n FROM console_railway_setup_access',
+        )
+      ).rows[0].n,
+      0,
+    );
+    denySetup = false;
     assert.equal(
       (await request(`/targets/${ids[0]}/connect`, target)).status,
       200,
@@ -199,17 +243,36 @@ test(
     assert.equal(saved.environment_id, uid(2));
     assert.deepEqual(saved.services, { backend: uid(3), admin: uid(4) });
     assert.equal(decryptSecret(saved.railway_token), railwayToken);
+    const setup = (
+      await pool.query('SELECT * FROM console_railway_setup_access')
+    ).rows[0];
+    assert.equal(setup.scope, `workspace:${uid(9)}`);
+    assert.notEqual(setup.setup_token, setupToken);
+    assert.equal(decryptSecret(setup.setup_token), setupToken);
     const venue = (
       await pool.query('SELECT * FROM venues WHERE id=$1', [ids[0]])
     ).rows[0];
     assert.equal(venue.api_url, 'https://service-3.test');
     assert.equal(venue.admin_url, 'https://service-4.test');
     assert.equal(venue.staff_url, null);
+    const rediscovered = await request(`/targets/${ids[0]}/discover`, {});
+    assert.equal(rediscovered.status, 200);
+    assert.equal(rediscovered.body.discovered.setupConnected, true);
+    providerProject = uid(10);
+    providerWorkspace = uid(11);
+    const otherWorkspace = await request(`/targets/${ids[1]}/connect`, {
+      ...target,
+      setupToken: '',
+    });
+    assert.equal(otherWorkspace.status, 400);
+    assert.equal(otherWorkspace.body.code, 'RAILWAY_SETUP_REQUIRED');
     assert.equal(
-      (await request(`/targets/${ids[0]}/discover`, {})).status,
-      200,
-      'Saved token can be reused.',
+      mutations,
+      2,
+      'A saved workspace token must not be reused for an unrelated workspace.',
     );
+    providerProject = uid(1);
+    providerWorkspace = uid(9);
     assert.equal(
       (await request(`/targets/${ids[1]}/connect`, target)).status,
       409,
@@ -244,6 +307,7 @@ test(
     assert.equal(jobs[0].venue_id, ids[0]);
     assert.equal(jobs[0].approval_mode, 'automatic');
     assert.equal(jobs[0].target_snapshot.services.staff, undefined);
+    assert.equal(Object.hasOwn(jobs[0].target_snapshot, 'setup_token'), false);
     const listing = await request('');
     const serialized = JSON.stringify(listing.body);
     assert.equal(listing.body.releases.length, 1);
@@ -252,6 +316,8 @@ test(
     for (const secret of [
       railwayToken,
       githubToken,
+      setupToken,
+      'setup_token',
       'github_token',
       'railway_token',
       'platform_api_key',
@@ -263,5 +329,18 @@ test(
       'Active rollouts prevent reconnecting.',
     );
     assert.equal(mutations, 2);
+    await pool.query("UPDATE venue_release_rollouts SET status='cancelled'");
+    assert.equal(
+      (
+        await request(`/targets/${ids[0]}/connect`, {
+          ...target,
+          railwayToken: '',
+          setupToken: '',
+        })
+      ).status,
+      200,
+      'Saved project and workspace tokens can be reused.',
+    );
+    assert.equal(mutations, 4);
   },
 );

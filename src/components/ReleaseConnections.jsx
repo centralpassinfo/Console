@@ -120,6 +120,7 @@ export function ReleaseSourceCard({ source = {}, onChange }) {
 
 export function RailwaySetupDialog({ target, onClose, onSaved, onAdvanced }) {
   const [token, setToken] = useState('');
+  const [setupToken, setSetupToken] = useState('');
   const [discovery, setDiscovery] = useState(null);
   const [services, setServices] = useState(target.services);
   const [employeeUrl, setEmployeeUrl] = useState(target.employeeUrl || '');
@@ -170,6 +171,7 @@ export function RailwaySetupDialog({ target, onClose, onSaved, onAdvanced }) {
         method: 'POST',
         body: {
           railwayToken: token,
+          setupToken,
           services,
           employeeUrl,
           manageUpdates: true,
@@ -233,6 +235,36 @@ export function RailwaySetupDialog({ target, onClose, onSaved, onAdvanced }) {
               <strong>{discovery.projectName}</strong>
               <span>Environment: {discovery.environmentName}</span>
             </div>
+            <label>
+              {discovery.setupConnected
+                ? 'Replace workspace setup token (optional)'
+                : 'Railway workspace token for setup'}
+              <input
+                type="password"
+                autoComplete="new-password"
+                required={!discovery.setupConnected}
+                value={setupToken}
+                onChange={(e) => setSetupToken(e.target.value)}
+                placeholder={
+                  discovery.setupConnected
+                    ? 'Saved setup access will be used'
+                    : 'Paste workspace token once for this workspace'
+                }
+              />
+            </label>
+            <p>
+              Railway requires workspace access to change service settings. In{' '}
+              <a
+                href="https://railway.com/account/tokens"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Railway account settings → Tokens
+              </a>
+              , create a token for the workspace containing this project.
+              Console encrypts and reuses it for venue setup in that workspace.
+              Deployments continue using each venue’s project token.
+            </p>
             <p>
               Confirm which service runs each part of this venue. Matches are
               selected automatically where they are clear.

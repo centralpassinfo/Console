@@ -7,10 +7,18 @@ const ROOTS = {
 };
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const ENDPOINT = 'https://backboard.railway.com/graphql/v2';
-function failure(message, status = 502) {
+function failure(message, status = 424) {
   return Object.assign(new Error(message), { status });
 }
-async function railwayQuery(token, query, variables = {}, fetcher = fetch) {
+async function railwayQuery(
+  token,
+  query,
+  variables = {},
+  fetcher = fetch,
+  tokenKind = 'project',
+) {
+  const operation =
+    /\b(?:query|mutation)\s+(\w+)/.exec(query)?.[1] || 'Discovery';
   let response;
   try {
     response = await fetcher(ENDPOINT, {
@@ -19,31 +27,70 @@ async function railwayQuery(token, query, variables = {}, fetcher = fetch) {
       signal: AbortSignal.timeout(15000),
       headers: {
         'Content-Type': 'application/json',
-        'Project-Access-Token': token,
+        ...(tokenKind === 'setup'
+          ? { Authorization: `Bearer ${token}` }
+          : { 'Project-Access-Token': token }),
       },
       body: JSON.stringify({ query, variables }),
     });
   } catch {
-    throw failure('Railway could not be reached. Try connecting again.');
-  }
-  if (!response.ok)
-    throw failure(
-      response.status === 401 || response.status === 403
-        ? 'Railway rejected this project token. Use a token for this venue’s production environment.'
-        : 'Railway could not complete discovery.',
+    throw Object.assign(
+      failure('Railway could not be reached. Try connecting again.'),
+      { operation, code: 'RAILWAY_UNAVAILABLE' },
     );
+  }
+  const denied = () =>
+    Object.assign(
+      failure(
+        tokenKind === 'setup'
+          ? 'Railway rejected setup access. Use a workspace token with permission to manage this venue’s project.'
+          : 'Railway rejected this project token. Use a token for this venue’s production environment.',
+        403,
+      ),
+      { code: 'RAILWAY_ACCESS_DENIED', operation },
+    );
+  if (!response.ok) {
+    if ([401, 403].includes(response.status)) throw denied();
+    throw Object.assign(
+      failure(
+        'Railway could not complete this setup request. Try again after checking Railway availability.',
+      ),
+      { code: 'RAILWAY_PROVIDER_ERROR', operation },
+    );
+  }
   let payload;
   try {
     payload = await response.json();
   } catch {
-    throw failure(
-      'Railway returned unreadable service information. Try connecting again.',
+    throw Object.assign(
+      failure(
+        'Railway returned unreadable service information. Try connecting again.',
+      ),
+      { operation, code: 'RAILWAY_PROVIDER_ERROR' },
     );
   }
-  if (payload.errors?.length || !payload.data)
-    throw failure(
-      'Railway could not read this project. Check the project token and its environment access.',
+  if (payload?.errors?.length || !payload?.data) {
+    if (
+      payload?.errors?.some(
+        (e) =>
+          /UNAUTHENTICATED|FORBIDDEN|UNAUTHORIZED/i.test(
+            e.extensions?.code || '',
+          ) ||
+          /not authori[sz]ed|unauthori[sz]ed|permission|access denied|project.token/i.test(
+            e.message || '',
+          ),
+      )
+    )
+      throw denied();
+    throw Object.assign(
+      failure(
+        tokenKind === 'setup'
+          ? 'Railway could not apply or verify service settings. Check that the setup token can manage this project, then reconnect.'
+          : 'Railway could not read this project. Check the project token and its environment access.',
+      ),
+      { code: 'RAILWAY_PROVIDER_ERROR', operation },
     );
+  }
   return payload.data;
 }
 function host(value) {
@@ -105,7 +152,7 @@ async function discoverRailway(token, venue = {}, fetcher = fetch) {
     throw failure('Paste this venue’s Railway project token.', 400);
   const { projectToken } = await railwayQuery(
     token,
-    'query { projectToken { projectId environmentId project { name } environment { name } } }',
+    'query { projectToken { projectId environmentId project { name workspaceId } environment { name } } }',
     {},
     fetcher,
   );
@@ -157,6 +204,9 @@ async function discoverRailway(token, venue = {}, fetcher = fetch) {
   return {
     ...variables,
     projectName: projectToken.project?.name || 'Venue project',
+    workspaceId: UUID.test(projectToken.project?.workspaceId || '')
+      ? projectToken.project.workspaceId
+      : null,
     environmentName: projectToken.environment?.name || 'Production',
     services: services.filter((s) => !s.image),
     suggested: proposeServices(services, venue),
@@ -180,6 +230,20 @@ async function configureRailway(token, discovery, selected, fetcher = fetch) {
         400,
       );
   }
+  const setupQuery = (query, variables) =>
+    railwayQuery(token, query, variables, fetcher, 'setup');
+  const access = await setupQuery(
+    'query SetupAccess($projectId:String!){project(id:$projectId){id}}',
+    { projectId: discovery.projectId },
+  );
+  if (access.project?.id !== discovery.projectId)
+    throw Object.assign(
+      failure(
+        'The setup token cannot manage this venue’s Railway project.',
+        403,
+      ),
+      { operation: 'SetupAccess', code: 'RAILWAY_ACCESS_DENIED' },
+    );
   for (const [role, serviceId] of ids) {
     const service = discovery.services.find((s) => s.id === serviceId);
     const variables = {
@@ -187,34 +251,28 @@ async function configureRailway(token, discovery, selected, fetcher = fetch) {
       projectId: discovery.projectId,
       environmentId: discovery.environmentId,
     };
-    // Only the token's environment and explicitly selected application services
-    // are changed. Database/other project services are never touched.
-    await railwayQuery(
-      token,
+    // Only the environment discovered from the venue's project token and the
+    // selected application services are changed, even with workspace access.
+    await setupQuery(
       `mutation TakeControl($input:ServiceInstanceAutoDeployUpdateInput!){serviceInstanceAutoDeployUpdate(input:$input){enabled}}`,
       { input: { ...variables, enabled: false } },
-      fetcher,
     );
     if (root(service.rootDirectory) !== ROOTS[role])
-      await railwayQuery(
-        token,
+      await setupQuery(
         `mutation SetRoot($serviceId:String!,$environmentId:String,$input:ServiceInstanceUpdateInput!){serviceInstanceUpdate(serviceId:$serviceId,environmentId:$environmentId,input:$input)}`,
         {
           serviceId,
           environmentId: discovery.environmentId,
           input: { rootDirectory: ROOTS[role] },
         },
-        fetcher,
       );
     const { serviceInstanceAutoDeployStatus, serviceInstance } =
-      await railwayQuery(
-        token,
+      await setupQuery(
         `query Verify($projectId:String!,$environmentId:String!,$serviceId:String!){
       serviceInstanceAutoDeployStatus(projectId:$projectId,environmentId:$environmentId,serviceId:$serviceId){enabled}
       serviceInstance(environmentId:$environmentId,serviceId:$serviceId){rootDirectory}
     }`,
         variables,
-        fetcher,
       );
     if (
       serviceInstanceAutoDeployStatus?.enabled !== false ||

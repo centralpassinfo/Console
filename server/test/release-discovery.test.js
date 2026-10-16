@@ -203,8 +203,16 @@ test('Railway setup mutates only selected application services and verifies cont
   };
   const calls = [];
   const provider = async (url, options) => {
+    assert.equal(options.headers.Authorization, 'Bearer token');
+    assert.equal(
+      options.headers['Project-Access-Token'],
+      undefined,
+      'Setup must not authenticate as an environment-scoped project token.',
+    );
     const { query, variables } = JSON.parse(options.body);
     calls.push({ query, variables });
+    if (query.includes('SetupAccess'))
+      return ok({ data: { project: { id: discovery.projectId } } });
     if (query.includes('Verify'))
       return ok({
         data: {
@@ -226,12 +234,13 @@ test('Railway setup mutates only selected application services and verifies cont
     });
   };
   await configureRailway('token', discovery, selected, provider);
-  assert.equal(calls.length, 9);
+  assert.equal(calls.length, 10);
   for (const c of calls) {
     const v = c.variables.input || c.variables;
-    assert.ok(
-      Object.values(selected).includes(v.serviceId || c.variables.serviceId),
-    );
+    if (!c.query.includes('SetupAccess'))
+      assert.ok(
+        Object.values(selected).includes(v.serviceId || c.variables.serviceId),
+      );
     if (c.query.includes('TakeControl')) {
       assert.equal(v.enabled, false);
       assert.equal(v.environmentId, uid(2));
@@ -251,7 +260,7 @@ test('Railway setup mutates only selected application services and verifies cont
   );
   assert.equal(
     calls.length,
-    6,
+    7,
     'Only the two required services are configured when staff is omitted.',
   );
   assert.equal(JSON.stringify(calls).includes(selected.staff), false);
@@ -280,14 +289,57 @@ test('Railway setup mutates only selected application services and verifies cont
     /different service/,
   );
   await assert.rejects(
-    configureRailway('token', discovery, selected, async () =>
-      ok({
-        data: {
-          serviceInstanceAutoDeployStatus: { enabled: true },
-          serviceInstance: { rootDirectory: 'backend' },
-        },
-      }),
+    configureRailway('token', discovery, selected, async (url, options) =>
+      JSON.parse(options.body).query.includes('SetupAccess')
+        ? ok({ data: { project: { id: discovery.projectId } } })
+        : ok({
+            data: {
+              serviceInstanceAutoDeployStatus: { enabled: true },
+              serviceInstance: { rootDirectory: 'backend' },
+            },
+          }),
     ),
     /not confirmed/,
+  );
+});
+
+test('Railway permission errors are actionable, sanitized and do not become proxy-replaced 502 responses', async () => {
+  const { railwayQuery } = require('../src/railway-discovery');
+  await assert.rejects(
+    railwayQuery(
+      'private-setup-token',
+      'query SetupAccess { project { id } }',
+      {},
+      async () =>
+        ok({
+          errors: [
+            {
+              message: 'Not authorized private-setup-token',
+              extensions: { code: 'FORBIDDEN' },
+            },
+          ],
+        }),
+      'setup',
+    ),
+    (error) =>
+      error.status === 403 &&
+      error.operation === 'SetupAccess' &&
+      error.code === 'RAILWAY_ACCESS_DENIED' &&
+      /workspace token/.test(error.message) &&
+      !error.message.includes('private-setup-token'),
+  );
+  await assert.rejects(
+    railwayQuery(
+      'secret',
+      'mutation TakeControl { field }',
+      {},
+      async () =>
+        ok({ errors: [{ message: 'Internal provider detail secret' }] }),
+      'setup',
+    ),
+    (error) =>
+      error.status === 424 &&
+      error.operation === 'TakeControl' &&
+      !error.message.includes('secret'),
   );
 });

@@ -86,6 +86,13 @@ setup before claiming that production updates require Console approval:
 2. Use **Releases → Configure → Connect Railway** for each venue. Paste its
    production-environment project token, click **Find services**, review the
    discovered project/environment and service names, then **Connect venue**.
+   Automatic configuration also requires a **workspace setup token** once per
+   Railway workspace. Create it in Railway **Account settings → Tokens**, selecting
+   the workspace containing the venue project. Enter it in the setup field after
+   discovery. Project tokens can discover/deploy, while service configuration uses
+   workspace access. Console encrypts this separate credential and reuses it only
+   for setup of projects in the same workspace; it never enters rollout snapshots
+   or deployment subprocesses. A read-only access check runs before changes.
    Console sets the selected services' component root folders and disables
    their Railway GitHub automatic deployments, then reads both settings back
    before saving. IDs and public portal addresses are discovered automatically;
@@ -120,6 +127,8 @@ setup before claiming that production updates require Console approval:
    connections from step 2 after Console is deployed. If setup is interrupted,
    some Railway settings may already have changed; reconnect to verify and
    complete the connection. Failed connection attempts are audited.
+   Provider errors include the failed setup operation and use a dependency-error
+   response rather than a 502, so an edge proxy does not replace the explanation.
 7. Discover the first release including these Platform changes. Approve a test
    venue first, confirm all portals and real workflows, then approve others.
    Use backward-compatible database migrations: the backend updates first and
