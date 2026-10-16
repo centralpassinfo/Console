@@ -168,7 +168,7 @@ test(
       );
     const target = {
       railwayToken,
-      services: { backend: uid(3), admin: uid(4), staff: uid(5) },
+      services: { backend: uid(3), admin: uid(4), staff: '' },
       manageUpdates: true,
       projectId: uid(999),
       environmentId: uid(999),
@@ -188,7 +188,7 @@ test(
       (await request(`/targets/${ids[0]}/connect`, target)).status,
       200,
     );
-    assert.equal(mutations, 3);
+    assert.equal(mutations, 2);
     const saved = (
       await pool.query(
         'SELECT * FROM venue_deployment_targets WHERE venue_id=$1',
@@ -197,12 +197,14 @@ test(
     ).rows[0];
     assert.equal(saved.project_id, uid(1));
     assert.equal(saved.environment_id, uid(2));
+    assert.deepEqual(saved.services, { backend: uid(3), admin: uid(4) });
     assert.equal(decryptSecret(saved.railway_token), railwayToken);
     const venue = (
       await pool.query('SELECT * FROM venues WHERE id=$1', [ids[0]])
     ).rows[0];
     assert.equal(venue.api_url, 'https://service-3.test');
     assert.equal(venue.admin_url, 'https://service-4.test');
+    assert.equal(venue.staff_url, null);
     assert.equal(
       (await request(`/targets/${ids[0]}/discover`, {})).status,
       200,
@@ -214,7 +216,7 @@ test(
     );
     assert.equal(
       mutations,
-      3,
+      2,
       'Duplicate assignment rejected before changing external settings.',
     );
     await pool.query('UPDATE venues SET automatic_updates=true WHERE id=$1', [
@@ -241,6 +243,7 @@ test(
     assert.equal(jobs.length, 1);
     assert.equal(jobs[0].venue_id, ids[0]);
     assert.equal(jobs[0].approval_mode, 'automatic');
+    assert.equal(jobs[0].target_snapshot.services.staff, undefined);
     const listing = await request('');
     const serialized = JSON.stringify(listing.body);
     assert.equal(listing.body.releases.length, 1);
@@ -259,6 +262,6 @@ test(
       409,
       'Active rollouts prevent reconnecting.',
     );
-    assert.equal(mutations, 3);
+    assert.equal(mutations, 2);
   },
 );

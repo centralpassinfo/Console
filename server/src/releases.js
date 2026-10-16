@@ -60,7 +60,11 @@ function cleanTarget(input) {
     );
   const services = {};
   for (const component of COMPONENTS) {
-    if (component === "employee" && !input.services?.[component]) continue;
+    if (
+      ["staff", "employee"].includes(component) &&
+      !input.services?.[component]
+    )
+      continue;
     if (!UUID.test(input.services?.[component] || ""))
       fail(`A valid ${component} service ID is required.`);
     services[component] = input.services[component];
@@ -115,7 +119,7 @@ function assertEligible(venue, target, active) {
   if (
     !venue.api_url ||
     !venue.admin_url ||
-    !venue.staff_url ||
+    (target.services.staff && !venue.staff_url) ||
     (target.services.employee && !target.employee_url)
   )
     fail(`${venue.name} needs URLs for all deployed portals.`);

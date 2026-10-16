@@ -238,6 +238,24 @@ test('Railway setup mutates only selected application services and verifies cont
     }
   }
   calls.length = 0;
+  await configureRailway(
+    'token',
+    discovery,
+    {
+      backend: selected.backend,
+      admin: selected.admin,
+      staff: '',
+      employee: '',
+    },
+    provider,
+  );
+  assert.equal(
+    calls.length,
+    6,
+    'Only the two required services are configured when staff is omitted.',
+  );
+  assert.equal(JSON.stringify(calls).includes(selected.staff), false);
+  calls.length = 0;
   await assert.rejects(
     configureRailway(
       'token',

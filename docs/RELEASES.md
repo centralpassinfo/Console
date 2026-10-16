@@ -6,6 +6,11 @@ the confirmation lists every selected venue, including those outside the filter.
 A bulk approval is atomic in Console: either every selected venue is queued or
 none are. Deployment is independent per venue and sequential within a venue.
 
+Backend and owner dashboard services are required. Staff and employee portals
+are optional: choose **Not used** for either absent portal. Console configures,
+deploys and verifies only selected services, and requires portal URLs only for
+those services. Reconnecting a venue preserves its saved optional selections.
+
 ## Automatic updates for selected venues
 
 Every venue starts with **Automatic updates off**. The switch on each venue row

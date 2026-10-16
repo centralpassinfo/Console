@@ -93,6 +93,56 @@ test('setup requires separate services and disabled automatic deployment', () =>
     /different Railway service/,
   );
 });
+test('staff and employee services are optional but selected portals need valid IDs and URLs', () => {
+  const admin = '12345678-1234-1234-1234-123456789013';
+  const target = {
+    projectId: uuid,
+    environmentId: uuid,
+    autoDeployDisabled: true,
+    services: { backend: uuid, admin, staff: '', employee: '' },
+  };
+  const saved = cleanTarget(target);
+  assert.deepEqual(saved.services, { backend: uuid, admin });
+  const venue = {
+    name: 'No staff portal',
+    status: 'active',
+    api_url: 'https://api.test',
+    admin_url: 'https://admin.test',
+    staff_url: null,
+  };
+  assert.doesNotThrow(() => assertEligible(venue, saved, null));
+  assert.throws(
+    () =>
+      cleanTarget({
+        ...target,
+        services: { ...target.services, staff: 'invalid' },
+      }),
+    /staff service ID/,
+  );
+  assert.throws(
+    () =>
+      cleanTarget({ ...target, services: { ...target.services, admin: '' } }),
+    /admin service ID/,
+  );
+  assert.throws(
+    () =>
+      assertEligible(
+        venue,
+        { ...saved, services: { ...saved.services, staff: uuid } },
+        null,
+      ),
+    /URLs/,
+  );
+  assert.throws(
+    () =>
+      assertEligible(
+        venue,
+        { ...saved, services: { ...saved.services, employee: uuid } },
+        null,
+      ),
+    /URLs/,
+  );
+});
 test('suspended venues, missing setup and in-flight jobs cannot be approved', () => {
   const v = {
     name: 'Primo',
@@ -185,7 +235,10 @@ test('deployment uploads the pinned source and waits for each component before t
       {
         prepareSource: async (pinnedRelease, options) => {
           assert.equal(pinnedRelease.commit_sha, sha);
-          assert.equal(options.repository, 'https://github.com/CentralPass/centralpass-platform.git');
+          assert.equal(
+            options.repository,
+            'https://github.com/CentralPass/centralpass-platform.git',
+          );
           assert.equal(options.githubToken, 'shared-read-only-github-token');
           return { directory, source: directory };
         },
@@ -193,7 +246,10 @@ test('deployment uploads the pinned source and waits for each component before t
           events.push(`upload:${args[args.indexOf('--service') + 1]}`);
           assert.ok(args.includes('--path-as-root'));
           assert.equal(opts.env.RAILWAY_TOKEN, 'token');
-          assert.equal(JSON.stringify(opts.env).includes('shared-read-only-github-token'), false);
+          assert.equal(
+            JSON.stringify(opts.env).includes('shared-read-only-github-token'),
+            false,
+          );
           return { stdout: JSON.stringify({ deploymentId: uuid }) };
         },
         waitForDeployment: async () => {},
@@ -211,6 +267,66 @@ test('deployment uploads the pinned source and waits for each component before t
     ]);
   } finally {
     if (old) process.env.RAILWAY_CLI_PATH = old;
+    else delete process.env.RAILWAY_CLI_PATH;
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+test('deployment skips an absent staff portal while verifying configured employee portals', async () => {
+  const prior = process.env.RAILWAY_CLI_PATH;
+  process.env.RAILWAY_CLI_PATH = 'railway';
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'release-optional-staff-test-'),
+  );
+  const uploaded = [],
+    verified = [];
+  try {
+    await deployRelease(
+      {
+        release,
+        target: {
+          project_id: uuid,
+          environment_id: uuid,
+          services: {
+            backend: 'backend-id',
+            admin: 'admin-id',
+            employee: 'employee-id',
+          },
+          employee_url: 'https://employee.test',
+        },
+        venue: {
+          api_url: 'https://api.test',
+          admin_url: 'https://admin.test',
+          staff_url: null,
+        },
+        token: 'token',
+        platformKey: 'key',
+        onProgress: async () => {},
+        assertRunning: async () => {},
+      },
+      {
+        prepareSource: async () => ({ directory, source: directory }),
+        execCommand: async (file, args) => {
+          uploaded.push(args[args.indexOf('--service') + 1]);
+          return { stdout: JSON.stringify({ deploymentId: uuid }) };
+        },
+        waitForDeployment: async () => {},
+        waitForComponent: async (component, url) => {
+          assert.ok(url);
+          verified.push(component);
+        },
+      },
+    );
+    assert.deepEqual(uploaded, ['backend-id', 'admin-id', 'employee-id']);
+    assert.deepEqual(verified, [
+      'backend',
+      'admin',
+      'employee',
+      'backend',
+      'admin',
+      'employee',
+    ]);
+  } finally {
+    if (prior) process.env.RAILWAY_CLI_PATH = prior;
     else delete process.env.RAILWAY_CLI_PATH;
     await fs.rm(directory, { recursive: true, force: true });
   }
@@ -246,22 +362,58 @@ test('upload acceptance is not deployment success, including same-version redepl
   });
   assert.equal(checks, 2);
 });
-test('a failed backend deployment stops the venue before either frontend upload',async()=>{
-  const prior=process.env.RAILWAY_CLI_PATH;process.env.RAILWAY_CLI_PATH='railway';
-  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'release-failure-test-'));
-  const uploaded=[];
+test('a failed backend deployment stops the venue before either frontend upload', async () => {
+  const prior = process.env.RAILWAY_CLI_PATH;
+  process.env.RAILWAY_CLI_PATH = 'railway';
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'release-failure-test-'),
+  );
+  const uploaded = [];
   try {
-    await assert.rejects(deployRelease({release,
-      target:{project_id:uuid,environment_id:uuid,services:{backend:'backend-id',admin:'admin-id',staff:'staff-id'}},
-      venue:{api_url:'https://api',admin_url:'https://admin',staff_url:'https://staff'},token:'token',platformKey:'key',
-      onProgress:async()=>{},assertRunning:async()=>{},
-    },{
-      prepareSource:async()=>({directory,source:directory}),
-      execCommand:async(file,args)=>{uploaded.push(args[args.indexOf('--service')+1]);return {stdout:JSON.stringify({deploymentId:uuid})};},
-      waitForDeployment:async()=>{throw new Error('FAILED');},
-      waitForComponent:async()=>{throw new Error('Should not verify an unsuccessful deployment');},
-    }),/FAILED/);
-    assert.deepEqual(uploaded,['backend-id']);
+    await assert.rejects(
+      deployRelease(
+        {
+          release,
+          target: {
+            project_id: uuid,
+            environment_id: uuid,
+            services: {
+              backend: 'backend-id',
+              admin: 'admin-id',
+              staff: 'staff-id',
+            },
+          },
+          venue: {
+            api_url: 'https://api',
+            admin_url: 'https://admin',
+            staff_url: 'https://staff',
+          },
+          token: 'token',
+          platformKey: 'key',
+          onProgress: async () => {},
+          assertRunning: async () => {},
+        },
+        {
+          prepareSource: async () => ({ directory, source: directory }),
+          execCommand: async (file, args) => {
+            uploaded.push(args[args.indexOf('--service') + 1]);
+            return { stdout: JSON.stringify({ deploymentId: uuid }) };
+          },
+          waitForDeployment: async () => {
+            throw new Error('FAILED');
+          },
+          waitForComponent: async () => {
+            throw new Error('Should not verify an unsuccessful deployment');
+          },
+        },
+      ),
+      /FAILED/,
+    );
+    assert.deepEqual(uploaded, ['backend-id']);
     await assert.rejects(fs.access(directory));
-  }finally{if(prior)process.env.RAILWAY_CLI_PATH=prior;else delete process.env.RAILWAY_CLI_PATH;await fs.rm(directory,{recursive:true,force:true});}
+  } finally {
+    if (prior) process.env.RAILWAY_CLI_PATH = prior;
+    else delete process.env.RAILWAY_CLI_PATH;
+    await fs.rm(directory, { recursive: true, force: true });
+  }
 });

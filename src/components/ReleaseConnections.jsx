@@ -137,7 +137,15 @@ export function RailwaySetupDialog({ target, onClose, onSaved, onAdvanced }) {
       );
       const suggested = { ...discovered.suggested };
       for (const role of Object.keys(suggested))
-        if (discovered.services.some((s) => s.id === target.services[role]))
+        if (
+          target.configured &&
+          ['staff', 'employee'].includes(role) &&
+          !target.services[role]
+        )
+          suggested[role] = '';
+        else if (
+          discovered.services.some((s) => s.id === target.services[role])
+        )
           suggested[role] = target.services[role];
       setServices(suggested);
       setDiscovery(discovered);
@@ -233,14 +241,14 @@ export function RailwaySetupDialog({ target, onClose, onSaved, onAdvanced }) {
               {[
                 ['backend', 'Backend'],
                 ['admin', 'Owner dashboard'],
-                ['staff', 'Staff portal'],
+                ['staff', 'Staff portal (optional)'],
                 ['employee', 'Employee portal (optional)'],
               ].map(([role, label]) => (
                 <label key={role}>
                   {label}
                   <select
                     aria-label={label}
-                    required={role !== 'employee'}
+                    required={role === 'backend' || role === 'admin'}
                     value={services[role] || ''}
                     onChange={(e) => {
                       setServices({ ...services, [role]: e.target.value });
@@ -253,7 +261,9 @@ export function RailwaySetupDialog({ target, onClose, onSaved, onAdvanced }) {
                     }}
                   >
                     <option value="">
-                      {role === 'employee' ? 'Not used' : 'Choose a service'}
+                      {role === 'staff' || role === 'employee'
+                        ? 'Not used'
+                        : 'Choose a service'}
                     </option>
                     {discovery.services.map((s) => (
                       <option

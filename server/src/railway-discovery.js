@@ -167,11 +167,10 @@ async function configureRailway(token, discovery, selected, fetcher = fetch) {
   if (
     !selected.backend ||
     !selected.admin ||
-    !selected.staff ||
     new Set(ids.map(([, id]) => id)).size !== ids.length
   )
     throw failure(
-      'Choose a different service for the backend, admin and staff portals.',
+      'Choose the backend and owner dashboard, using a different service for each selected component.',
       400,
     );
   for (const [role, id] of ids) {

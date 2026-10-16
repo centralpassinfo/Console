@@ -229,7 +229,7 @@ router.post(
       if (
         !urls.api_url ||
         !urls.admin_url ||
-        !urls.staff_url ||
+        (services.staff && !urls.staff_url) ||
         (services.employee && !employeeUrl)
       )
         throw Object.assign(

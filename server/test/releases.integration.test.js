@@ -112,7 +112,7 @@ test(
           services: {
             backend: uid(100 + id),
             admin: uid(200 + id),
-            staff: uid(300 + id),
+            ...(id === ids[0] ? { staff: uid(300 + id) } : {}),
           },
           railwayToken: "sensitive-project-token-value",
           autoDeployDisabled: true,
@@ -120,6 +120,7 @@ test(
       });
       assert.equal(res.status, 200, await res.text());
     }
+    await pool.query("UPDATE venues SET staff_url=NULL WHERE id=$1", [ids[1]]);
     const bad = await request("/releases/approve", {
       releaseId,
       venueIds: [ids[0], ids[2]],

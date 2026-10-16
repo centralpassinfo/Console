@@ -763,13 +763,13 @@ export default function ReleasesPage() {
               {[
                 ['backend', 'Backend service ID'],
                 ['admin', 'Admin service ID'],
-                ['staff', 'Staff service ID'],
+                ['staff', 'Staff service ID (optional)'],
                 ['employee', 'Employee service ID (optional)'],
               ].map(([key, label]) => (
                 <label key={key}>
                   {label}
                   <input
-                    required={key !== 'employee'}
+                    required={key === 'backend' || key === 'admin'}
                     value={target.services[key]}
                     onChange={(e) =>
                       setTarget({
@@ -887,9 +887,10 @@ export default function ReleasesPage() {
                 ))}
               </ul>
               <p>
-                Backend, admin and staff portals update in order. A failure can
-                leave a venue partly updated; progress is recorded separately
-                for each venue.
+                Backend and owner dashboard update first, followed by any
+                configured staff and employee portals. A failure can leave a
+                venue partly updated; progress is recorded separately for each
+                venue.
               </p>
             </>
           ) : confirm.kind === 'cancel' ? (
