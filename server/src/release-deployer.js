@@ -42,6 +42,40 @@ function cliEnvironment(token) {
     NO_COLOR: "1",
   };
 }
+const SECRET_ENV = ["RAILWAY_TOKEN", "GIT_CONFIG_VALUE_0"];
+const SECRET_PATTERNS = [
+  /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi,
+  /x-access-token:[^@\s]+/gi,
+  /\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
+  /(https?:\/\/)[^/\s:@]+:[^/\s@]+@/gi,
+];
+// Failure messages are stored on the rollout and in the audit log, so the CLI's
+// output must never carry the token it was given or any credential it echoes.
+function scrubOutput(text, env = {}) {
+  let out = String(text || "")
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  for (const key of SECRET_ENV) {
+    const value = env[key];
+    if (!value || value.length < 6) continue;
+    const parts = [value, ...value.split(/\s+/).filter((p) => p.length >= 8)];
+    for (const part of parts) out = out.split(part).join("[redacted]");
+  }
+  for (const pattern of SECRET_PATTERNS)
+    out = out.replace(pattern, (match, prefix) =>
+      /^https?:\/\//i.test(prefix || "")
+        ? `${prefix}[redacted]@`
+        : "[redacted]",
+    );
+  return out.length > 400 ? `…${out.slice(-400)}` : out;
+}
+function failureDetail(error, env) {
+  if (error?.code === "ENOENT") return "the executable was not found";
+  if (error?.killed) return "it timed out";
+  return scrubOutput(error?.stderr || error?.stdout || error?.message, env);
+}
 async function run(file, args, options = {}) {
   try {
     return await exec(file, args, {
@@ -50,9 +84,10 @@ async function run(file, args, options = {}) {
       windowsHide: true,
       ...options,
     });
-  } catch {
+  } catch (error) {
+    const detail = failureDetail(error, options.env);
     throw new Error(
-      `${path.basename(file)} could not complete ${args[0]}. Check worker access and Railway deployment logs.`,
+      `${path.basename(file)} could not complete ${args[0]}${detail ? `: ${detail.replace(/[.\s]+$/, "")}` : ""}. Check worker access and Railway deployment logs.`,
     );
   }
 }
@@ -396,6 +431,8 @@ async function deployRelease(
 }
 module.exports = {
   cliEnvironment,
+  scrubOutput,
+  run,
   prepareSource,
   verifyComponent,
   waitForComponent,

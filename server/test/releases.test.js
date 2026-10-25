@@ -14,6 +14,8 @@ const {
   verifyComponent,
   deployRelease,
   cliEnvironment,
+  scrubOutput,
+  run,
   waitForDeployment,
   deploymentIdFromOutput,
 } = require('../src/release-deployer');
@@ -199,6 +201,39 @@ test('deployment subprocess receives only its project token, not Console secrets
   assert.equal(env.DATABASE_URL, undefined);
   delete process.env.SESSION_SECRET;
   delete process.env.DATABASE_URL;
+});
+test('failed CLI runs report the tool output without its credentials', async () => {
+  const token = 'b7c1e2d4-5f60-4a1b-9c2d-3e4f5a6b7c8d';
+  const script =
+    "process.stderr.write('\\x1b[31mUnauthorized.\\x1b[0m Token ' + process.env.RAILWAY_TOKEN + ' is not valid\\n'); process.exit(1)";
+  await assert.rejects(
+    run(process.execPath, ['-e', script], { env: cliEnvironment(token) }),
+    (error) => {
+      assert.match(
+        error.message,
+        /could not complete -e: Unauthorized\. Token \[redacted\] is not valid\. Check worker access/,
+      );
+      assert.equal(error.message.includes(token), false);
+      return true;
+    },
+  );
+  await assert.rejects(
+    run('centralpass-missing-cli', ['up'], { env: cliEnvironment(token) }),
+    /could not complete up: the executable was not found\./,
+  );
+});
+test('CLI output scrubbing removes echoed credentials and long output', () => {
+  const header = `Authorization: Basic ${Buffer.from('x-access-token:ghs_secretvalue1234567890abcd').toString('base64')}`;
+  const text = scrubOutput(
+    `fatal: ${header} https://user:pass@github.com/x/y Bearer abcdefgh12345678 ghp_${'z'.repeat(36)} x-access-token:raw`,
+    { GIT_CONFIG_VALUE_0: header },
+  );
+  assert.equal(
+    /Basic|pass@|abcdefgh12345678|ghp_|x-access-token:raw/.test(text),
+    false,
+  );
+  assert.match(text, /https:\/\/\[redacted\]@github\.com/);
+  assert.equal(scrubOutput('x'.repeat(1000)).length, 401);
 });
 test('deployment verifies the backend before uploading portals in parallel', async () => {
   const old = process.env.RAILWAY_CLI_PATH;
