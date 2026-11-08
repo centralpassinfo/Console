@@ -10,6 +10,7 @@ import VenueFormPage from './pages/VenueFormPage.jsx';
 import VenuesPage from './pages/VenuesPage.jsx';
 import ReleasesPage from './pages/ReleasesPage.jsx';
 import OperatorsPage from './pages/OperatorsPage.jsx';
+import BillingPage from './pages/BillingPage.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="activity" element={<ActivityPage />} />
         <Route path="releases" element={<ReleasesPage />} />
         <Route path="operators" element={<OperatorsPage />} />
+        <Route path="billing" element={<BillingPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

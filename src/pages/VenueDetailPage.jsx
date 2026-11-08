@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../api.js';
 import Icon from '../components/Icon.jsx';
 import Modal from '../components/Modal.jsx';
@@ -12,6 +12,7 @@ import { formatDateTime, formatNumber, humanise } from '../format.js';
 
 export default function VenueDetailPage() {
   const { id } = useParams();
+  const location = useLocation();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -28,6 +29,7 @@ export default function VenueDetailPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(()=>{ if(!loading&&data&&new URLSearchParams(location.search).get('tab')==='billing') document.getElementById('billing')?.scrollIntoView({block:'start'}); },[loading,data,location.search]);
 
   const featureState = data?.live?.status;
   const registry = useMemo(() => Object.fromEntries((featureState?.registry || []).map((feature) => [feature.key, feature])), [featureState]);

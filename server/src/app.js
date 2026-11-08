@@ -62,7 +62,8 @@ app.get('/api/console/health', async (req, res) => {
 app.use('/api/console/auth', require('./routes/auth'));
 app.use('/api/console/venues', require('./routes/venues'));
 app.use('/api/console/venues', require('./routes/contracts'));
-app.use('/api/console/venues', require('./routes/billing'));
+app.use('/api/console/venues', require('./routes/billing-documents'));
+app.use('/api/console/billing', require('./routes/billing-overview'));
 app.use('/api/console/venues', require('./routes/tablet'));
 app.use('/api/console/audit', require('./routes/audit'));
 app.use('/api/console/operators', require('./routes/operators'));

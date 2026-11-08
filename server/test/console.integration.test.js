@@ -131,11 +131,12 @@ test(
     // and an overdue invoice reaches the venue list.
     const otherVenue = (await adaBrowser('POST', '/venues', { name: 'Other Cafe', slug: 'other-cafe', apiUrl: venueApi, platformApiKey: KEY })).body.venue;
     const invoice = { invoiceNumber: 'CP-1', kind: 'monthly', periodStart: '2026-09-01', periodEnd: '2026-09-30', issuedOn: '2026-09-01', dueOn: '2026-09-15', amount: '250.00', gst: '25.00', status: 'sent', contractId: uploaded.body.contract.id };
+    await pool.query('UPDATE billing_settings SET gst_registered=true WHERE id=1');
     assert.equal((await adaBrowser('POST', `/venues/${otherVenue.id}/billing/invoices`, { ...invoice, invoiceNumber: 'CP-X' })).status, 400, 'Another venue’s contract cannot be linked.');
     const created = await adaBrowser('POST', `/venues/${venue.id}/billing/invoices`, invoice);
     assert.equal(created.status, 201);
     assert.equal(created.body.invoice.dueOn, '2026-09-15', 'Due dates do not shift by a day.');
-    await adaBrowser('POST', `/venues/${venue.id}/billing/invoices/${created.body.invoice.id}/payments`, { receivedOn: '2026-09-20', amount: '100.00', method: 'bank_transfer' });
+    await adaBrowser('POST', `/venues/${venue.id}/billing/invoices/${created.body.invoice.id}/payments`, { receivedOn: '2026-09-20', amount: '100.00', method: 'bank_transfer', requestId:'console-test-payment-1' });
     const ledger = await adaBrowser('GET', `/venues/${venue.id}/billing`);
     assert.equal(ledger.body.summary.nextDueOn, '2026-09-15');
     assert.equal(ledger.body.summary.outstandingCents, 17500);
